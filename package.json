@@ -1,0 +1,70 @@
+{
+  "name": "deepseek-harness-cookbook",
+  "version": "0.1.0",
+  "description": "《DeepSeek Harness 前沿工程实践》各章节配套可运行代码。",
+  "type": "module",
+  "license": "MIT",
+  "author": "DeepSeek",
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:zhangjessey/deepseek-harness-cookbook.git"
+  },
+  "bugs": {
+    "url": "https://github.com/zhangjessey/deepseek-harness-cookbook/issues"
+  },
+  "homepage": "https://github.com/zhangjessey/deepseek-harness-cookbook#readme",
+  "keywords": ["deepseek", "harness", "agent", "cordis", "dsh", "cookbook"],
+  "files": ["src", "LICENSE", "README.md"],
+  "scripts": {
+    "start:ch05": "tsx src/ch05/tool-main.ts",
+    "start:ch05:seam": "tsx src/ch05/seam-demo.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src",
+    "lint:fix": "eslint src --fix",
+    "format": "prettier --write \"src/**/*.ts\" \"**/*.md\"",
+    "format:check": "prettier --check \"src/**/*.ts\" \"**/*.md\""
+  },
+  "dependencies": {
+    "@deepseek-ai/cordis": "4.0.1",
+    "@deepseek-ai/cordis-plugin-group": "1.0.2",
+    "@deepseek-ai/cordis-plugin-hmr": "1.0.17",
+    "@deepseek-ai/cordis-plugin-include": "1.0.7",
+    "@deepseek-ai/cordis-plugin-loader": "1.0.3",
+    "@deepseek-ai/cordis-plugin-logger-console": "1.0.2",
+    "@deepseek-ai/cordis-plugin-timer": "1.1.4",
+    "@deepseek-ai/dsh-agent": "0.1.0-rc.7",
+    "@deepseek-ai/dsh-attachment": "0.1.0-rc.7",
+    "@deepseek-ai/dsh-brand": "0.1.0-rc.7",
+    "@deepseek-ai/dsh-code-runtime": "0.1.0-rc.7",
+    "@deepseek-ai/dsh-code-runtime-worker-thread": "0.1.0-rc.7",
+    "@deepseek-ai/dsh-invariants": "0.1.0-rc.7",
+    "@deepseek-ai/dsh-llm": "0.1.0-rc.7",
+    "@deepseek-ai/dsh-sandbox": "0.1.0-rc.7",
+    "@deepseek-ai/dsh-sandbox-local": "0.1.0-rc.7",
+    "@deepseek-ai/dsh-sandbox-policy": "0.1.0-rc.7",
+    "@deepseek-ai/dsh-scope": "0.1.0-rc.7",
+    "@deepseek-ai/dsh-session": "0.1.0-rc.7",
+    "@deepseek-ai/dsh-session-projection": "0.1.0-rc.7",
+    "@deepseek-ai/dsh-system-prompt": "0.1.0-rc.7",
+    "@deepseek-ai/dsh-timeout": "0.1.0-rc.7",
+    "@deepseek-ai/dsh-tools": "0.1.0-rc.7",
+    "@deepseek-ai/dsh-user-approval": "0.1.0-rc.7"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.22.0",
+    "@types/node": "^24.4.1",
+    "eslint": "9.22.0",
+    "eslint-config-prettier": "10.1.8",
+    "prettier": "^3.0.0",
+    "tsx": "^4.19.3",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.0.0"
+  },
+  "engines": {
+    "node": ">=24.4.1",
+    "npm": ">=10.0.0"
+  },
+  "overrides": {
+    "@eslint/plugin-kit": "^0.3.4"
+  }
+}

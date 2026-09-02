@@ -1,0 +1,28 @@
+# Dependencies
+node_modules/
+*.tgz
+
+# Build outputs
+dist/
+build/
+*.tsbuildinfo
+
+# IDE / Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+coverage/
+*.log
+
+# Cache
+.eslintcache
+.nyc_output
+.temp/
