@@ -18,6 +18,8 @@
   "scripts": {
     "start:ch05": "tsx src/ch05/tool-main.ts",
     "start:ch05:seam": "tsx src/ch05/seam-demo.ts",
+    "start:ch06": "tsx src/ch06/pipeline-demo.ts",
+    "start:ch06:code": "tsx src/ch06/code-mode-demo.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src",
     "lint:fix": "eslint src --fix",

@@ -45,14 +45,19 @@ npm install --legacy-peer-deps
 
 当前已包含章节：
 
-| 章节                                   | 目录        |
-| -------------------------------------- | ----------- |
-| 05｜能力接入：Capability Seam 与 Tools | `src/ch05/` |
+| 章节                                      | 目录        |
+| ----------------------------------------- | ----------- |
+| 05｜能力接入：Capability Seam 与 Tools    | `src/ch05/` |
+| 06｜工具流水线：Code Mode、守卫与执行边界 | `src/ch06/` |
 
 ```bash
 # 示例：运行第 05 章
 npm run start:ch05
 npm run start:ch05:seam
+
+# 示例：运行第 06 章
+npm run start:ch06
+npm run start:ch06:code
 ```
 
 ## 检查类型
