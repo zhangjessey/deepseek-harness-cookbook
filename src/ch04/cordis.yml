@@ -1,0 +1,56 @@
+# src/ch04/cordis.yml —— 一份配置，一棵树
+# 顶层是一个 YAML 数组，每个元素 = 树上的一个节点（Entry）
+
+# 叶子 1：logger —— config 里的 !!js 表达式在加载时惰性求值
+- id: logger
+  name: './plugins/logger.ts'
+  config:
+    level: !!js process.env.LOG_LEVEL ?? 'info'
+
+# 叶子 2：根级的 shell 服务（deepseek 模型）
+- id: shell
+  name: './plugins/shell.ts'
+  config:
+    provider: deepseek
+    model: deepseek-chat
+
+# 组 1：租户 A —— isolate 给 shell 服务加前缀 tenant-a（本组自成世界），
+# 组里自己提供 shell（mock），组内 chat 消费的一定是本组的 mock
+# （isolate 另有一种写法 shell: true，把前缀绑在条目自己身上；这里用的是 label 写法）
+- id: tenant-a
+  name: '@deepseek-ai/cordis-plugin-group'
+  group: true
+  isolate:
+    shell: tenant-a
+  config:
+    - id: a-shell
+      name: './plugins/shell.ts'
+      config:
+        provider: mock
+        model: mock-chat
+    - id: a-chat
+      name: './plugins/chat.ts'
+
+# 组 2：租户 B —— isolate 用字符串 label（命名 realm），
+# intercept 在组作用域里覆盖 shell 的解析配置
+- id: tenant-b
+  name: '@deepseek-ai/cordis-plugin-group'
+  group: true
+  isolate:
+    shell: tenant-b
+  intercept:
+    shell:
+      model: intercept-model
+  config:
+    - id: b-shell
+      name: './plugins/shell.ts'
+      config:
+        provider: b-provider
+        model: b-model
+    - id: b-chat
+      name: './plugins/chat.ts'
+
+# 被禁用的节点：保留在配置里，但不会挂载
+- id: spare
+  name: './plugins/chat.ts'
+  disabled: true

@@ -16,6 +16,11 @@
   "keywords": ["deepseek", "harness", "agent", "cordis", "dsh", "cookbook"],
   "files": ["src", "LICENSE", "README.md"],
   "scripts": {
+    "start:ch01": "tsx src/ch01/lifo-demo.ts",
+    "start:ch02": "tsx src/ch02/hello-inject.ts",
+    "start:ch03": "tsx src/ch03/five-modes.ts",
+    "start:ch04": "tsx src/ch04/isolate-demo.ts",
+    "start:ch04:tree": "tsx src/ch04/main.ts",
     "start:ch05": "tsx src/ch05/tool-main.ts",
     "start:ch05:seam": "tsx src/ch05/seam-demo.ts",
     "start:ch06": "tsx src/ch06/pipeline-demo.ts",

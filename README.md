@@ -45,20 +45,33 @@ npm install --legacy-peer-deps
 
 当前已包含章节：
 
-| 章节                                      | 目录        |
-| ----------------------------------------- | ----------- |
-| 05｜能力接入：Capability Seam 与 Tools    | `src/ch05/` |
-| 06｜工具流水线：Code Mode、守卫与执行边界 | `src/ch06/` |
+| 章节                                         | 目录        |
+| -------------------------------------------- | ----------- |
+| 01｜时之可逆：Context、插件与可撤销的 Effect | `src/ch01/` |
+| 02｜空之协同：Service、inject 与响应式依赖   | `src/ch02/` |
+| 03｜事件系统：五种分发模式及其适用场景       | `src/ch03/` |
+| 04｜插件树：声明式配置、isolate 与 HMR       | `src/ch04/` |
+| 05｜能力接入：Capability Seam 与 Tools       | `src/ch05/` |
+| 06｜工具流水线：Code Mode、守卫与执行边界    | `src/ch06/` |
 
 ```bash
-# 示例：运行第 05 章
+# 第 01–04 章
+npm run start:ch01
+npm run start:ch02
+npm run start:ch03
+npm run start:ch04
+npm run start:ch04:tree
+
+# 第 05 章
 npm run start:ch05
 npm run start:ch05:seam
 
-# 示例：运行第 06 章
+# 第 06 章
 npm run start:ch06
 npm run start:ch06:code
 ```
+
+> 第 04 章的 HMR 示例需要 `--expose-internals`，没有封装成 npm script，命令见 `src/ch04/README.md`。
 
 ## 检查类型
 

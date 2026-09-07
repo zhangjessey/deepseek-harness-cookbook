@@ -1,0 +1,21 @@
+# HMR 专用配置：先挂上 HMR 自己，再 include 业务配置
+#
+# 为什么不直接写进 cordis.yml？
+# 因为 hmr 插件要求进程带 --expose-internals 启动，而前三步都是用
+# `npx tsx main.ts` 跑的——写进去会让它们直接报
+# "--expose-internals is required for HMR service"。
+# 所以单独一份配置，业务部分用嵌套 include 复用，一行内容都不用重复。
+
+- id: timer                                   # 必挂：HMR 靠 timer 服务做防抖
+  name: '@deepseek-ai/cordis-plugin-timer'    # 少了它不报错，但 HMR 会静默卡在 PENDING
+
+- id: hmr                                     # HMR 插件自己
+  name: '@deepseek-ai/cordis-plugin-hmr'
+  config:
+    root:                                     # 监听哪些目录（省略也行，默认就是 ['.']）
+      - '.'
+
+- id: app                                     # 嵌套 include：直接复用 cordis.yml
+  name: '@deepseek-ai/cordis-plugin-include'  # 业务配置一行都不用重复
+  config:
+    path: './cordis.yml'
