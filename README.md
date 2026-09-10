@@ -45,14 +45,16 @@ npm install --legacy-peer-deps
 
 当前已包含章节：
 
-| 章节                                         | 目录        |
-| -------------------------------------------- | ----------- |
-| 01｜时之可逆：Context、插件与可撤销的 Effect | `src/ch01/` |
-| 02｜空之协同：Service、inject 与响应式依赖   | `src/ch02/` |
-| 03｜事件系统：五种分发模式及其适用场景       | `src/ch03/` |
-| 04｜插件树：声明式配置、isolate 与 HMR       | `src/ch04/` |
-| 05｜能力接入：Capability Seam 与 Tools       | `src/ch05/` |
-| 06｜工具流水线：Code Mode、守卫与执行边界    | `src/ch06/` |
+| 章节                                                       | 目录        |
+| ---------------------------------------------------------- | ----------- |
+| 01｜时之可逆：Context、插件与可撤销的 Effect               | `src/ch01/` |
+| 02｜空之协同：Service、inject 与响应式依赖                 | `src/ch02/` |
+| 03｜事件系统：五种分发模式及其适用场景                     | `src/ch03/` |
+| 04｜插件树：声明式配置、isolate 与 HMR                     | `src/ch04/` |
+| 05｜能力接入：Capability Seam 与 Tools                     | `src/ch05/` |
+| 06｜工具流水线：Code Mode、守卫与执行边界                  | `src/ch06/` |
+| 07｜跨平台进程沙箱：Linux、macOS、Windows 的实现与安全边界 | `src/ch07/` |
+| 08｜会话日志：Append-Only Log 与 Projection                | `src/ch08/` |
 
 ```bash
 # 第 01–04 章
@@ -69,6 +71,14 @@ npm run start:ch05:seam
 # 第 06 章
 npm run start:ch06
 npm run start:ch06:code
+
+# 第 07 章
+npm run start:ch07
+npm run start:ch07:platforms
+
+# 第 08 章
+npm run start:ch08
+npm run start:ch08:projection
 ```
 
 > 第 04 章的 HMR 示例需要 `--expose-internals`，没有封装成 npm script，命令见 `src/ch04/README.md`。

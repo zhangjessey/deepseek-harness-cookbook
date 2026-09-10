@@ -9,3 +9,5 @@
 - 添加第 04 章：插件树：声明式配置、isolate 与 HMR
 - 添加第 05 章：能力接入：Capability Seam 与 Tools
 - 添加第 06 章：工具流水线：Code Mode、守卫与执行边界
+- 添加第 07 章：跨平台进程沙箱：Linux、macOS、Windows 的实现与安全边界
+- 添加第 08 章：会话日志：Append-Only Log 与 Projection

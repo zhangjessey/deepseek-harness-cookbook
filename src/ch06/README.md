@@ -82,31 +82,31 @@ interface ToolArgsMap {
   /** Add two numbers. */
   add: {
     /** First addend */
-    a: number;
+    a: number
     /** Second addend */
-    b: number;
-  } & Record<string, JsonValue>;
+    b: number
+  } & Record<string, JsonValue>
   /** Report the runtime environment. */
-  env_probe: Record<string, JsonValue>;
+  env_probe: Record<string, JsonValue>
 }
 
 interface ToolOutputMap {
-  add: number;
+  add: number
   env_probe: {
-    platform?: string;
-    node?: string;
-  };
+    platform?: string
+    node?: string
+  }
 }
 
 type ToolName = keyof ToolOutputMap
 
 declare class ToolCallError extends Error {
-  readonly name: "ToolCallError";
-  readonly toolName: ToolName;
+  readonly name: 'ToolCallError'
+  readonly toolName: ToolName
 }
 
 declare const tools: {
-  [K in ToolName]: (args: ToolArgsMap[K]) => Promise<ToolOutputMap[K]>;
+  [K in ToolName]: (args: ToolArgsMap[K]) => Promise<ToolOutputMap[K]>
 }
 ```
 
