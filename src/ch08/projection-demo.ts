@@ -13,7 +13,8 @@ interface Stats {
 }
 
 // 领域通过声明合并，把自己这一格加到全链共享的投影类型表上
-declare module '@deepseek-ai/dsh-session-projection' {
+// 注意要指到 /types：包入口只是把 SessionProjectionMap 再导出，再导出的接口合并不上去
+declare module '@deepseek-ai/dsh-session-projection/types' {
   interface SessionProjectionMap {
     'demo/stats': Stats
   }
