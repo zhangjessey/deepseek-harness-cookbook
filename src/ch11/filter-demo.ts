@@ -1,4 +1,4 @@
-// src/ch11/filter-demo.ts —— 跨会话日志：精确过滤
+// src/ch11/filter-demo.ts —— 跨会话查询：精确过滤
 // 跑法：npm run start:ch11:filter
 import { Context } from '@deepseek-ai/cordis'
 import { createMessage, createUserMessage } from '@deepseek-ai/dsh-llm'

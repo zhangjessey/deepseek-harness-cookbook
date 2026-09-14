@@ -1,4 +1,4 @@
-// src/ch11/corpus-demo.ts —— 跨会话日志：逻辑语料库的四个读入口
+// src/ch11/corpus-demo.ts —— 跨会话查询：逻辑语料库的四个读入口
 // 跑法：npm run start:ch11:corpus
 import { Context } from '@deepseek-ai/cordis'
 import { createMessage, createUserMessage } from '@deepseek-ai/dsh-llm'

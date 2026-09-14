@@ -1,4 +1,4 @@
-// src/ch11/search-demo.ts —— 跨会话日志：全文搜索
+// src/ch11/search-demo.ts —— 跨会话查询：全文搜索
 // 跑法：npm run start:ch11:search
 import { Context } from '@deepseek-ai/cordis'
 import { createMessage, createUserMessage } from '@deepseek-ai/dsh-llm'

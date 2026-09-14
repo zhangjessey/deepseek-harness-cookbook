@@ -56,8 +56,9 @@ npm install --legacy-peer-deps
 | 07｜跨平台进程沙箱：Linux、macOS、Windows 的实现与安全边界 | `src/ch07/` |
 | 08｜会话日志：Append-Only Log 与 Projection                | `src/ch08/` |
 | 09｜会话续接：Fork、Resume 与崩溃修复                      | `src/ch09/` |
-| 10｜上下文压缩：compaction，裁剪与溢出存储                 | `src/ch10/` |
+| 10｜上下文压缩：Compaction 与裁剪                          | `src/ch10/` |
 | 11｜跨会话查询：读取、搜索与谱系追踪                       | `src/ch11/` |
+| 12｜上下文边界：工具输出与图片附件的外部持久化             | `src/ch12/` |
 
 ```bash
 # 第 01–04 章
@@ -88,7 +89,6 @@ npm run start:ch09:fork
 npm run start:ch09:crash
 
 # 第 10 章
-npm run start:ch10:spill
 npm run start:ch10:compact
 npm run start:ch10:prune
 
@@ -97,6 +97,11 @@ npm run start:ch11:corpus
 npm run start:ch11:search
 npm run start:ch11:filter
 npm run start:ch11:lineage
+
+# 第 12 章
+npm run start:ch12:spill
+npm run start:ch12:attachment
+npm run start:ch12:admission
 ```
 
 > 第 04 章的 HMR 示例需要 `--expose-internals`，没有封装成 npm script，命令见 `src/ch04/README.md`。

@@ -1,5 +1,5 @@
-// src/ch10/spill-demo.ts —— 上下文压缩：超大文本存到会话旁的文件里
-// 跑法：npm run start:ch10:spill
+// src/ch12/spill-demo.ts —— 上下文边界：超大文本存到会话旁的文件里
+// 跑法：npm run start:ch12:spill
 import { Context } from '@deepseek-ai/cordis'
 import { CallId } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
@@ -10,7 +10,7 @@ import { join } from 'node:path'
 
 async function main(): Promise<void> {
   // 存到临时目录，跑完能看到文件落盘的样子
-  const root = mkdtempSync(join(tmpdir(), 'dsh-ch10-spill-'))
+  const root = mkdtempSync(join(tmpdir(), 'dsh-ch12-spill-'))
 
   const ctx = new Context()
   await ctx.plugin(LocalSpillStore, { root })

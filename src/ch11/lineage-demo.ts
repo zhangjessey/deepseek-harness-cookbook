@@ -1,4 +1,4 @@
-// src/ch11/lineage-demo.ts —— 跨会话日志：谱系追踪
+// src/ch11/lineage-demo.ts —— 跨会话查询：谱系追踪
 // 跑法：npm run start:ch11:lineage
 import { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'

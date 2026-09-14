@@ -1,7 +1,7 @@
 // src/ch10/prune-demo.ts —— 上下文压缩：把超长的工具结果裁短
 // 跑法：npm run start:ch10:prune
 import { Context } from '@deepseek-ai/cordis'
-import ToolResultPruner from '@deepseek-ai/dsh-compaction-tool-result-pruner'
+import ToolResultPruner, { codePointLength } from '@deepseek-ai/dsh-compaction-tool-result-pruner'
 import { CallId, createToolResultMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
 import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
 import TokenMeter from '@deepseek-ai/dsh-token-meter'
@@ -42,7 +42,8 @@ async function main(): Promise<void> {
   )
 
   console.log('--- 裁剪前 ---')
-  console.log(`  tool/result 文本长度：${longText.length} 字`)
+  // 与服务同一把尺子：Unicode 码点（不是 UTF-16 码元）
+  console.log(`  tool/result 文本长度：${codePointLength(longText)} 字`)
   console.log(`  开头：${longText.slice(0, 30)}…`)
 
   const result = ctx.toolResultPruner.pruneSession(session)
@@ -73,6 +74,14 @@ async function main(): Promise<void> {
       .map((l) => `    ${l}`)
       .join('\n')}`,
   )
+
+  // 这一轮最后才闭合——压缩的标记得落在开着的轮次里
+  session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
+
+  console.log('--- 裁剪后的日志 ---')
+  for (const event of session.events) {
+    console.log(`  seq ${event.seq}  ${event.type}`)
+  }
 }
 
 main()

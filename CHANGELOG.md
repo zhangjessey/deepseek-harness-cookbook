@@ -12,5 +12,6 @@
 - 添加第 07 章：跨平台进程沙箱：Linux、macOS、Windows 的实现与安全边界
 - 添加第 08 章：会话日志：Append-Only Log 与 Projection
 - 添加第 09 章：会话续接：Fork、Resume 与崩溃修复（新增依赖 `@deepseek-ai/dsh-session-persistence`、`@deepseek-ai/dsh-session-persistence-jsonl`）
-- 添加第 10 章：上下文压缩：compaction，裁剪与溢出存储（新增依赖 `@deepseek-ai/dsh-compaction`、`@deepseek-ai/dsh-compaction-basic`、`@deepseek-ai/dsh-compaction-tool-result-pruner`、`@deepseek-ai/dsh-spill`、`@deepseek-ai/dsh-spill-local`、`@deepseek-ai/dsh-spill-policy`、`@deepseek-ai/dsh-token-meter`）
+- 添加第 10 章：上下文压缩：Compaction 与裁剪（新增依赖 `@deepseek-ai/dsh-compaction`、`@deepseek-ai/dsh-compaction-basic`、`@deepseek-ai/dsh-compaction-tool-result-pruner`、`@deepseek-ai/dsh-token-meter`）
 - 添加第 11 章：跨会话查询：读取、搜索与谱系追踪（新增依赖 `@deepseek-ai/dsh-session-query`、`@deepseek-ai/dsh-session-query-sqlite`、`@deepseek-ai/dsh-session-title`）
+- 添加第 12 章：上下文边界：工具输出与图片附件的外部持久化（新增依赖 `@deepseek-ai/dsh-attachment-local`、`@deepseek-ai/dsh-home-paths`；溢出存储的 `@deepseek-ai/dsh-spill` / `dsh-spill-local` / `dsh-spill-policy` 在本章首次使用）
