@@ -47,7 +47,7 @@ async function main(): Promise<void> {
   // 入口一：listSessions —— 只给 header，一条事件都不读
   console.log('--- listSessions：列 header 清单 ---')
   const records = await ctx.sessionQuery.listSessions()
-  console.log(`  共 ${records.length} 个会话（内存 + 磁盘合并后的结果）`)
+  console.log(`  共 ${records.length} 个会话（本例没装持久化，都在内存里）`)
   // 结果本身是"最近创建的在前"，几个会话几毫秒内先后创建时顺序不固定，按 id 展示以便复现
   const sorted = [...records].sort((x, y) => x.header.id.localeCompare(y.header.id))
   for (const record of sorted) {
