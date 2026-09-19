@@ -2,6 +2,8 @@
 // 跑法：npm run start:ch12:attachment
 import { Context } from '@deepseek-ai/cordis'
 import LocalAttachmentStore from '@deepseek-ai/dsh-attachment-local'
+import { createUserMessage } from '@deepseek-ai/dsh-llm'
+import { Session, SessionId } from '@deepseek-ai/dsh-session'
 import { mkdtempSync, readdirSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -29,7 +31,7 @@ async function main(): Promise<void> {
   })
   console.log(`  attachmentId：${ref.attachmentId}`)
   console.log(`  类型 / 尺寸 / 字节：${ref.mediaType}  ${ref.width}x${ref.height}  ${ref.bytes} 字节`)
-  console.log(`  name：${ref.name}   ← 传进去的是 /Users/alice/secret/pixel.png，路径被剥掉了`)
+  console.log(`  name：${ref.name}   ← 路径被剥掉了，只剩最后一段`)
 
   console.log('\n--- ② 字节落在哪 ---')
   const objectRoot = join(home, 'attachments', 'v1', 'objects')
@@ -48,8 +50,17 @@ async function main(): Promise<void> {
   console.log(`  objects 下的对象数：${objects(objectRoot).length}`)
 
   console.log('\n--- ④ 日志里存的到底是什么 ---')
-  const message = { type: 'user/message', content: [{ type: 'image', attachment: ref }] }
-  const asText = JSON.stringify(message)
+  // 真的往日志里追加一条（不是拼出来给人看的）：先落盘、后追加事件
+  const session = Session.create(SessionId('sess-demo'))
+  session.append(
+    'user/message',
+    createUserMessage({
+      content: [{ type: 'image', attachment: ref }],
+      source: { kind: 'user' },
+    }),
+    { surfaceOp: 'append' },
+  )
+  const asText = JSON.stringify(session.events[0])
   console.log(`  ${asText}`)
   console.log(`  日志字符数 ${asText.length}，图片 ${ref.bytes} 字节   ← 字节一个都没进日志`)
 

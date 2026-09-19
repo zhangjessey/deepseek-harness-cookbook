@@ -4,15 +4,16 @@
 
 | 文件                 | 说明                                                              |
 | -------------------- | ----------------------------------------------------------------- |
-| `spill-demo.ts`      | 溢出存储：把超大文本存成文件，模型拿到的是首尾预览 + 一句检索指引 |
-| `attachment-demo.ts` | 图片附件：存进去拿到引用、看字节落在哪、看日志里留下的是什么      |
-| `admission-demo.ts`  | 准入与失败：校验不落盘、批量先全量校验、收紧限制不影响旧历史      |
+| `spill-demo.ts`      | 溢出存储：工具吐出 60 KB 纯文本，策略插件把它换成首尾预览 + 一句指引，全文另存成文件 |
+| `attachment-demo.ts` | 图片附件：存进去拿到引用、看字节落在哪、看日志里留下什么、再取回字节      |
+| `admission-demo.ts`  | 准入与失败：看准入线、校验不落盘、批量先全量校验、收紧限制不影响旧历史      |
 
 ## 依赖
 
 本章用到这些包（已加入项目 `package.json`）：
 
 - `@deepseek-ai/dsh-spill` / `dsh-spill-local` / `dsh-spill-policy` —— 溢出存储的 seam、本地后端，以及把它挂到"工具执行完"这个时机的插件
+- `@deepseek-ai/dsh-output-retention` —— 预览机制（`TextRetainer`），`dsh-spill-policy` 要用它来裁出头尾预览
 - `@deepseek-ai/dsh-attachment` —— 附件 seam 定义
 - `@deepseek-ai/dsh-attachment-local` —— 附件的本地后端（依赖原生模块 `sharp`，装的是预编译包）
 - `@deepseek-ai/dsh-home-paths` —— `dsh-attachment-local` 的 **peer 依赖**
@@ -47,19 +48,26 @@ npm run start:ch12:admission
 ### `npm run start:ch12:spill`
 
 ```
---- 把超大文本交给溢出存储 ---
+--- ① 工具跑完，原始输出多大 ---
+  纯文本：60016 字节
+  阈值 maxInlineBytes：50000   ← 超了，策略插件动手
+--- ② 模型眼前那份（换过之后）---
+  头：## Section
+This document explains how context overflow happens and what to do about it.
+## Secti…
+  …（中间被预览截掉了）
+  尾：…/...-web_fetch.txt. Use read with offset/limit, or grep this path to search within it.)
+  替换后：50000 字节
+--- ③ 全文存在哪 ---
   定位符（locator）：/var/folders/.../dsh-ch12-spill-.../session-2f1617f23ca8/...-web_fetch.txt
-  字节数（bytes）：177
+  落盘：60016 字节，权限 600   ← 一个字节都没少
   检索提示（retrievalHint）：Use read with offset/limit, or grep this path to search within it.
-  落盘：177 字节，权限 600
-  内容核对：
-    Fetching https://example.com/docs/intro ...
-    ## Introduction
-    This document explains how context overflow happens and what to do about it.
-    ... (the full body would be much longer)
 ```
 
 每次跑会变的是那两段：临时根目录（`dsh-ch12-spill-` 后面那串）和文件名的随机前缀；`session-2f1617f23ca8` 是会话 id 的哈希，同一个会话永远不变。结构始终是：根目录 → 会话目录 → 随机前缀 + 清洗后的文件名。
+
+关键是 ② 和 ③ 的对比：模型眼前那份只有 50000 字节（预览 + 一句通知），而文件里躺着完整的 60016 字节——**外置不是丢弃**。
+关键是 ② 和 ③ 的对比：模型眼前那份只有 50000 字节（预览 + 一句通知），而文件里躺着完整的 60016 字节——**外置不是丢弃**。
 
 ### `npm run start:ch12:attachment`
 
@@ -67,7 +75,7 @@ npm run start:ch12:admission
 --- ① 一张图存进去，拿到什么 ---
   attachmentId：sha256:c2ab983c5681efb075d3b64315727791fdcf91bc61338f83f6a327a5ec206a34
   类型 / 尺寸 / 字节：image/png  8x8  95 字节
-  name：pixel.png   ← 传进去的是 /Users/alice/secret/pixel.png，路径被剥掉了
+  name：pixel.png   ← 路径被剥掉了，只剩最后一段
 
 --- ② 字节落在哪 ---
   .../attachments/v1/objects/c2/c2ab983c…206a34
@@ -79,8 +87,8 @@ npm run start:ch12:admission
   objects 下的对象数：1
 
 --- ④ 日志里存的到底是什么 ---
-  {"type":"user/message","content":[{"type":"image","attachment":{"attachmentId":"sha256:c2ab983c5681efb075d3b64315727791fdcf91bc61338f83f6a327a5ec206a34","mediaType":"image/png","width":8,"height":8,"bytes":95,"name":"pixel.png"}}]}
-  日志字符数 231，图片 95 字节   ← 字节一个都没进日志
+  {"type":"user/message","seq":0,"time":...,"data":{"content":[{"type":"image","attachment":{"attachmentId":"sha256:c2ab983c5681efb075d3b64315727791fdcf91bc61338f83f6a327a5ec206a34","mediaType":"image/png","width":8,"height":8,"bytes":95,"name":"pixel.png"}}],"source":{"kind":"user"},"role":"user","id":"..."},"surfaceOp":"append"}
+  日志字符数 373，图片 95 字节   ← 字节一个都没进日志
 
 --- ⑤ 要发给模型时再取回来 ---
   readImage：95 字节，image/png，8x8
@@ -89,7 +97,7 @@ npm run start:ch12:admission
 要点：
 
 - `attachmentId` 是内容寻址的（`sha256:<摘要>`），同一份字节只存一份。
-- `name` 只保留文件名，目录分隔符会被剥掉。
+- `name` 只保留文件名，路径（含 `../`）被剥掉，只剩最后一段。
 - 落盘位置是 `<home>/attachments/v1/objects/<摘要前两位>/<完整摘要>`，文件 600、目录 700。
 
 ### `npm run start:ch12:admission`
