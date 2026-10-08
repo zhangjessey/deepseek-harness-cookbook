@@ -60,7 +60,8 @@
     "start:ch14": "tsx src/ch14/preset-demo.ts",
     "start:ch15": "tsx src/ch15/goal-demo.ts",
     "start:ch16": "tsx src/ch16/subagent-demo.ts",
-    "start:ch17": "tsx src/ch17/workflow-demo.ts"
+    "start:ch17:workflow": "tsx src/ch17/workflow-demo.ts",
+    "start:ch17:ralph": "tsx src/ch17/ralph-demo.ts"
   },
   "dependencies": {
     "@deepseek-ai/cordis": "4.0.1",
