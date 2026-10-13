@@ -1,0 +1,38 @@
+{
+  "sessionId": "sess-1",
+  "rules": [
+    {
+      "name": "block ip 1.2.3.4",
+      "action": "deny",
+      "when": {
+        "field": "ip",
+        "op": "eq",
+        "value": "1.2.3.4"
+      },
+      "id": "rule-7a9546c1",
+      "state": "active"
+    },
+    {
+      "name": "block outofband",
+      "action": "deny",
+      "when": {
+        "field": "ip",
+        "op": "eq",
+        "value": "1.2.3.4"
+      },
+      "id": "rule-outofband",
+      "state": "active"
+    },
+    {
+      "name": "block admin probe",
+      "action": "deny",
+      "when": {
+        "field": "path",
+        "op": "starts_with",
+        "value": "/admin"
+      },
+      "id": "rule-99b8429d",
+      "state": "active"
+    }
+  ]
+}

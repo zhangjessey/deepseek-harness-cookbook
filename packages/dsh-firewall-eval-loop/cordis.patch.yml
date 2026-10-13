@@ -1,0 +1,6 @@
+# dsh 组合包补注层：把 firewall-eval-loop 插件挂进 Loader 注册表（整体替换一行的 config）。
+# 通过 `dsh plugin --profile <name> add <本包路径 | github:org/cookbook | npm:dsh-firewall-eval-loop>` 安装后生效。
+# patch 按"包名"引用，不是相对路径——这样 Node 才能解析到已安装的代码。
+- insert:
+    - id: firewall-eval-loop
+      name: 'dsh-firewall-eval-loop'

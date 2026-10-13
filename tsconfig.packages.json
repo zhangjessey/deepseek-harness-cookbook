@@ -1,0 +1,7 @@
+{
+  "extends": "./tsconfig.base.json",
+  // 连同 packages 下的测试一起检查：组合包的运行时测试（packages/bundles.test.ts）
+  // 是唯一验证"装上之后行为"的地方，它若不被 typecheck 覆盖，就会像 ch20 那个缺 await
+  // 的 bug 一样——只有补上检查才被发现。
+  "include": ["packages/*/src", "packages/**/*.test.ts"]
+}

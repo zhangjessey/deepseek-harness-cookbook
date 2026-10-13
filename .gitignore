@@ -5,6 +5,7 @@ node_modules/
 # Build outputs
 dist/
 build/
+lib/
 *.tsbuildinfo
 
 # IDE / Editor
@@ -21,6 +22,14 @@ Thumbs.db
 # Logs
 coverage/
 *.log
+# 例外：各讲的样本数据（不是日志产物，必须入仓库）
+!*.sample.log
+
+# 运行产物（cookbook 演示生成，可复现，不入仓库）
+*.ledger.json
+# 例外：ch19 的初始账本是样本数据（不是运行产物，必须入仓库）
+!src/firewall/ch19/rules.ledger.json
+.dsh-sessions/
 
 # Cache
 .eslintcache

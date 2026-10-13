@@ -1,0 +1,25 @@
+{
+  "rules": [
+    {
+      "name": "block admin scan",
+      "when": { "field": "path", "op": "starts_with", "value": "/admin" },
+      "unless": { "field": "path", "op": "eq", "value": "/admin/health" },
+      "action": "deny"
+    },
+    {
+      "name": "block sql injection",
+      "when": {
+        "and": [
+          { "field": "method", "op": "eq", "value": "POST" },
+          { "field": "body", "op": "matches", "value": "union\\s+select|or\\s+1=1" }
+        ]
+      },
+      "action": "deny"
+    },
+    {
+      "name": "block crawler ua",
+      "when": { "field": "ua", "op": "matches", "value": "python-requests|scrapy|curl/" },
+      "action": "deny"
+    }
+  ]
+}

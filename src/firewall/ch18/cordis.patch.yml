@@ -1,0 +1,6 @@
+# 声明式接入 dsh 宿主（开发调试用）：把 firewall 插件 insert 进 Loader 注册表，无需改 dsh 源码。
+# 注意：这里用相对路径 './firewall-plugin.ts'，只适用于 `dsh ... --patch` overlay 本地开发演示。
+# 若要正式 `dsh plugin add` 安装，请用 packages/dsh-firewall-rule 这个真正的组合包（按包名引用）。
+- insert:
+    - id: firewall
+      name: './firewall-plugin.ts'
