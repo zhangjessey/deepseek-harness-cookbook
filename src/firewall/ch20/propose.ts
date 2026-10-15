@@ -155,7 +155,8 @@ ${brief}
     try {
       const r = await ask(prompt, {
         system: PROPOSE_SYSTEM,
-        maxTokens: 1024,
+        // 不显式传 maxTokens：让框架注入模型默认值——显式传小值（如 256/1024）曾触发
+        // 服务端返回空 SSE 流（HTTP 200 但零数据事件），调用全部伪装成"返回内容为空"。
         timeoutMs: opts.timeoutMs,
       })
       // 拿到回复还要解析：输出不是 JSON 同样算"这一轮没长出候选"，一起降级。
