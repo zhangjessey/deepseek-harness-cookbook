@@ -12,7 +12,7 @@ import { SessionStore } from '@deepseek-ai/dsh-session'
 import { SystemPrompt } from '@deepseek-ai/dsh-system-prompt'
 import { ToolRuntime } from '@deepseek-ai/dsh-tools'
 import { LedgerLogService } from './session-log'
-import { Ledger } from './ledger'
+import { ACTOR, Ledger } from './ledger'
 import { FirewallEdit } from './tool-firewall-edit'
 import { mountApproval } from './approval'
 
@@ -39,7 +39,7 @@ function run(name: string) {
   return { callId: 'call-1' as never, name, arguments: {}, signal: new AbortController().signal } as never
 }
 
-test('审批闸端到端：off 级别写工具被拒、读工具放行', async () => {
+test('审批闸端到端：0 级别写工具被拒、读工具放行', async () => {
   const ctx = await boot()
   const ledger = new Ledger(ctx.ledgerLog, '/tmp/e2e-1.json', 'sess-e2e')
   const edit = new FirewallEdit(ledger)
@@ -49,11 +49,14 @@ test('审批闸端到端：off 级别写工具被拒、读工具放行', async (
     description: '起草候选',
     output,
     execute: async () => {
-      await edit.draftCandidate({
-        name: 'x',
-        action: 'deny',
-        when: { field: 'path', op: 'starts_with', value: '/admin' },
-      })
+      await edit.draftCandidate(
+        {
+          name: 'x',
+          action: 'deny',
+          when: { field: 'path', op: 'starts_with', value: '/admin' },
+        },
+        { by: ACTOR.agentDraft },
+      )
       return { result: 'drafted' }
     },
   } as never)
@@ -64,12 +67,12 @@ test('审批闸端到端：off 级别写工具被拒、读工具放行', async (
     execute: async () => ({ result: 'rules' }),
   } as never)
 
-  mountApproval(ctx, () => 'off')
+  mountApproval(ctx, () => '0')
   await new Promise((r) => setImmediate(r))
 
   const write = await ctx.tools.execute(run('firewall_draft'))
-  assert.equal(write.isError, true, 'off 级别下写工具被 pre-execute 拒绝')
-  assert.match(write.error.message, /off/, '拒绝理由包含自主级别 off')
+  assert.equal(write.isError, true, '0 级别下写工具被 pre-execute 拒绝')
+  assert.match(write.error.message, /自主级别 0/, '拒绝理由包含自主级别 0')
 
   const read = await ctx.tools.execute(run('firewall_list'))
   assert.equal(read.isError, false, '读工具不受自主级别限制，正常执行')
@@ -85,11 +88,14 @@ test('审批闸端到端：级别 2 写工具放行，白名单外工具被 guar
     description: '起草候选',
     output,
     execute: async () => {
-      await edit.draftCandidate({
-        name: 'x',
-        action: 'deny',
-        when: { field: 'path', op: 'starts_with', value: '/admin' },
-      })
+      await edit.draftCandidate(
+        {
+          name: 'x',
+          action: 'deny',
+          when: { field: 'path', op: 'starts_with', value: '/admin' },
+        },
+        { by: ACTOR.agentDraft },
+      )
       return { result: 'drafted' }
     },
   } as never)

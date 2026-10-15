@@ -21,7 +21,7 @@ export class FirewallEdit {
    * 权威时以为"起草成功了"；而 publish 抛错若没人接住，会变成 unhandled rejection
    * （Node ≥15 直接终止进程）。
    */
-  async draftCandidate(input: RuleInput): Promise<string> {
+  async draftCandidate(input: RuleInput, opts: { by?: string } = {}): Promise<string> {
     const when = assertValidCondition(input.when, 'draftCandidate 的 when')
     const unless =
       input.unless === undefined ? undefined : assertValidCondition(input.unless, 'draftCandidate 的 unless')
@@ -34,16 +34,19 @@ export class FirewallEdit {
       input: { ...input, when, unless },
       at: Date.now(),
       state: 'candidate',
+      by: opts.by,
     })
     return id
   }
 
-  // 人审批：把候选转 active（真实流程受自主级别与 tools/pre-execute 审批闸约束，见正文）。
-  async approve(id: string): Promise<void> {
+  // 审批：把候选转 active（真实流程受自主级别与 tools/pre-execute 审批闸约束，见正文）。
+  // 调用方必须标 `by`：人命令与 Agent 工具复用的是**同一份实现**，只有靠它才分得清
+  // 这次转正是人批的，还是 Agent 在级别 2 下自动批的——否则"谁批准的"事后无从回答。
+  async approve(id: string, opts: { by?: string } = {}): Promise<void> {
     // 目标必须存在、且当前是 candidate：否则"批准了一条不存在的规则"会**静默成功**——
     // 界面显示"已批准 xx"、日志里躺着一条 approve 事实，而规则从未存在，审计无从发现。
     this.requireExisting(id, '批准')
-    await this.ledger.publish({ type: 'rule.update', id, patch: {}, at: Date.now(), state: 'active' })
+    await this.ledger.publish({ type: 'rule.update', id, patch: {}, at: Date.now(), state: 'active', by: opts.by })
   }
 
   /**

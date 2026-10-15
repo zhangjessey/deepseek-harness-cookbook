@@ -1,7 +1,7 @@
 // src/firewall/ch19/approval.test.ts —— 审批与白名单规则的验证
 //
 // 断言的是"人始终在 Agent 之上"这条主张的可测部分：
-//  · 写操作在 off / 0 / manual 下一定被拦
+//  · 写操作在 0 / manual / off 下一定被拦
 //  · 读操作不受自主级别限制（否则 Agent 连"看"都做不到，也就没法起草）
 //  · 白名单外的工具一律拒绝，且守卫只收紧不放宽
 import { test } from 'node:test'
@@ -9,8 +9,8 @@ import assert from 'node:assert/strict'
 import { ALLOWED_TOOLS, WRITE_TOOLS, denyReasonFor, guardReasonFor } from './approval'
 import type { AutonomyLevel } from './command-firewall'
 
-test('写操作在 off / 0 / manual 下被拦下', () => {
-  for (const level of ['off', '0', 'manual'] as const) {
+test('写操作在 0 / manual / off 下被拦下', () => {
+  for (const level of ['0', 'manual', 'off'] as const) {
     for (const tool of ['firewall_draft', 'firewall_approve', 'firewall_reject']) {
       assert.ok(denyReasonFor(level, tool), `${level} 下 ${tool} 必须被拦`)
     }
@@ -20,7 +20,7 @@ test('写操作在 off / 0 / manual 下被拦下', () => {
 test('级别 1 / 2 的写操作不在这一层拦；读操作任何级别都不拦', () => {
   assert.equal(denyReasonFor('1', 'firewall_draft'), undefined)
   assert.equal(denyReasonFor('2', 'firewall_approve'), undefined)
-  assert.equal(denyReasonFor('off', 'firewall_list'), undefined, '读操作不受自主级别限制')
+  assert.equal(denyReasonFor('0', 'firewall_list'), undefined, '读操作不受自主级别限制')
 })
 
 test('白名单外的工具一律拒绝，名单内的放行', () => {
@@ -52,7 +52,7 @@ test('转正与下线永远比起草更需要人（级别 1 / 2 不是"全放行
 
 test('Agent 不能给自己提级（firewall_level 任何级别都拒绝）', () => {
   // 级别调整改变的是权限本身：若允许 Agent 调用，它在任何级别都能把自己提到 2。
-  for (const lv of ['0', 'manual', '1', '2', 'off'] as const) {
+  for (const lv of ['0', 'manual', '1', '2'] as const) {
     const reason = denyReasonFor(lv, 'firewall_level')
     assert.ok(reason, `${lv} 下 Agent 也不能调级别`)
     assert.ok(reason.includes('人调整'), '理由应指向人的界面')

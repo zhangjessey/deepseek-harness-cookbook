@@ -8,7 +8,7 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { edgeBundle, controlBundle } from '../bundles'
-import { Ledger } from '../ledger'
+import { ACTOR, Ledger } from '../ledger'
 import { verifyFacts } from '../facts'
 import { mountLedgerLog } from '../session-log'
 import { SessionProjectionRegistry } from '@deepseek-ai/dsh-session-projection'
@@ -43,9 +43,9 @@ async function main(): Promise<void> {
   const draft = await agentDraftRule(intent)
   console.log(`模型原始回复: ${draft.raw}`)
   console.log(`模型 token 用量: in=${draft.usage.inputTokens} out=${draft.usage.outputTokens}`)
-  const id = await edit.draftCandidate(draft.input)
+  const id = await edit.draftCandidate(draft.input, { by: ACTOR.agentDraft })
   console.log(`草稿 ${id} 起草为候选: ${JSON.stringify(draft.input)}`)
-  await edit.approve(id)
+  await edit.approve(id, { by: ACTOR.humanApprove })
   console.log(`人审批后 ${id} 已 active`)
 
   console.log('\n=== 带外修改：人直接改文件，补记对账 ===')

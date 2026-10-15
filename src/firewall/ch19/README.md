@@ -1,13 +1,13 @@
-# 第 19 讲 · 规则系统：让规则可生成，可修改，可持久化
+# 第 19 讲 · 规则系统：让规则可生成、可审批、可生效
 
 本讲在 ch18 引擎之上，把"规则如何被 Agent 起草、被人把关、从内存落盘、以会话日志为准留存"串成一条可审计、可并发安全的链路。
 
 ## 文件清单
 
 - `agent-draft.ts` —— **受约束起草**：把自然语言意图交给真实 DeepSeek 模型，产出结构化候选；第一稿一律是**候选（candidate）**，不直接生效。`isValidRuleWhen` 限定 `field`/`op`/`value` 取值，把生成关在契约内。
-- `ledger.ts` —— **账本**：四类事件（`rule.add` / `rule.update` / `rule.reject` / `rule.remove`）折叠成状态；发布串行（`writeChain`，**只保证同一进程内**——跨进程/多实例指向同一投影文件时仍需文件锁或收归单进程）；原子写（临时文件 + rename）；带外修改补记；重启从会话日志重折叠恢复。领域逻辑，不 import cordis。
+- `ledger.ts` —— **账本**：四类事件（`rule.add` / `rule.update` / `rule.reject` / `rule.remove`）折叠成状态；每类都带 `by` 标注变更来源（取值见 `ACTOR`：人命令 / Agent 工具 / 带外改文件），`rule.reject` 另可带 `reason`；发布串行（`writeChain`，**只保证同一进程内**——跨进程/多实例指向同一投影文件时仍需文件锁或收归单进程）；原子写（临时文件 + rename）；带外修改补记；重启从会话日志重折叠恢复。领域逻辑，不 import cordis。
 - `facts.ts` —— **verifyFacts**：重新折叠事件，与文件中投影的 `rules` 比对，校验"账本（权威）"与"文件（产物）"一致。
-- `command-firewall.ts` —— `/firewall` 命令的领域逻辑（list / level / approve / reject）+ 五个自主级别（`0` 与 `manual` 同义、`1` 默认、`2`、`off`）。纯领域逻辑，不碰命令注册。
+- `command-firewall.ts` —— `/firewall` 命令的领域逻辑（list / level / approve / reject）+ 三档自主级别（`0` / `1` / `2`，其中 `0` 与 `manual` 同义、`1` 为默认；`off` 是撤下治理工具，不算档位）。纯领域逻辑，不碰命令注册。
 - `tool-firewall-edit.ts` —— 审批工具：起草候选（第一稿不直接 active）、批准、驳回。提供纯函数供 demo/ 下的入口与 demo/real-model-run.ts 调用。
 - `services.ts` —— **dsh 接线层**：`LedgerService`（Provider，提供 `ctx.ledger`）+ `ControlService`（Consumer，`inject: ['ledger']`）。领域逻辑（ledger/command/edit）不 import cordis，接线集中在本文件。
 - `session-log.ts` —— **账本落在 dsh 会话日志上**：事实以插件注入的 `user/message`（来源 `plugin:firewall-ledger`）写进 `dsh-session`；读回只采信本插件来源并校验形状；状态只由折叠得到。
@@ -52,10 +52,13 @@ npm test
 删掉 `rules.ledger.json` 后首次运行的输出（其余机制输出固定；"Agent 起草候选"与"真实模型 Agent 测试"两步走真实模型，规则名/条件、token 用量每次运行可能不同）：
 
 ```
+=== /firewall level 1（默认）===
+自主级别已设为 1：起草自动；批准与驳回要人确认
+
 === Agent 起草候选 -> 人审批 -> 发布（真实模型）===
-模型原始回复: {"name":"block ip 1.2.3.4","action":"deny","when":{"field":"ip","op":"eq","value":"1.2.3.4"}}
+模型原始回复: {"name":"block ip 1.2.3.4","when":{"field":"ip","op":"eq","value":"1.2.3.4"},"action":"deny"}
 模型 token 用量: in=175 out=60
-草稿 rule-gznkluul 起草为候选: {"name":"block ip 1.2.3.4","action":"deny","when":{"field":"ip","op":"eq","value":"1.2.3.4"}}
+草稿 rule-gznkluul 起草为候选: {"name":"block ip 1.2.3.4","when":{"field":"ip","op":"eq","value":"1.2.3.4"},"action":"deny"}
 人审批后 rule-gznkluul 已 active
 
 === 带外修改：人直接改文件，补记对账 ===
@@ -73,7 +76,7 @@ npm test
   prompt 片段 firewall:ledger（order=60）已装配：含当前规则，总长=172
 
 === 真实模型 Agent 测试 ===
-模型起草候选（intent="阻止所有访问 /admin 路径的探测请求"）→ {"name":"block admin probe","action":"deny","when":{"field":"path","op":"starts_with","value":"/admin"}}
+模型起草候选（intent="阻止所有访问 /admin 路径的探测请求"）→ {"name":"block admin probe","when":{"field":"path","op":"starts_with","value":"/admin"},"action":"deny"}
 模型 token 用量: in=172 out=49
 Agent 起草候选 rule-7cglh6ve（state=candidate）
 人审批后 rule-7cglh6ve state=active
@@ -104,7 +107,7 @@ facts 一致=true，事件数=5
 
 ## 本讲的组合包
 
-`dsh-firewall-governance`：装上后提供账本（`ctx.ledger`）、五个自主级别与治理工具 `firewall_list` / `firewall_level` / `firewall_draft` / `firewall_approve` / `firewall_reject`。
+`dsh-firewall-governance`：装上后提供账本（`ctx.ledger`）、三档自主级别与治理工具 `firewall_list` / `firewall_level` / `firewall_draft` / `firewall_approve` / `firewall_reject`。
 构建、安装、分发与边界见 [规则系统 README](../README.md)。
 
 ## 两个平面怎么接

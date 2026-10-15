@@ -84,7 +84,7 @@ export class ControlService extends Service {
     })
   }
 
-  /** `/firewall` 命令与五个自主级别（级别状态由命令自己持有，故缓存实例）。 */
+  /** `/firewall` 命令与三档自主级别（级别状态由命令自己持有，故缓存实例）。 */
   get command(): FirewallCommand {
     return (this._command ??= new FirewallCommand(this.ctx.ledger.ledger))
   }

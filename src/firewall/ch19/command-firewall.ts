@@ -1,18 +1,18 @@
-// src/firewall/ch19/command-firewall.ts —— command-firewall：/firewall 命令 + 五个自主级别
+// src/firewall/ch19/command-firewall.ts —— command-firewall：/firewall 命令 + 三档自主级别
 //
 // 人掌握决定权的直接界面：/firewall list 看规则、/firewall level <x> 调自主级别、
-// /firewall approve <id> 批准候选。五个级别：0/manual、1(默认)、2、off。
-import { Ledger, Rule } from './ledger'
+// /firewall approve <id> 批准候选。三档级别：0/manual（同义）、1（默认）、2；off 是撤下治理工具，不算档位。
+import { ACTOR, Ledger, Rule } from './ledger'
 import { FirewallEdit } from './tool-firewall-edit'
 
 export type AutonomyLevel = '0' | 'manual' | '1' | '2' | 'off'
 
 const LEVEL_DESC: Record<AutonomyLevel, string> = {
-  '0': '每一步都确认，Agent 不自动做变更',
-  manual: '每一步都确认（同 0）',
-  '1': 'shadow 自动；灰度与转正确认',
-  '2': '新增类过门槛自动；收窄与下线确认',
-  off: '撤下治理工具，Agent 不能改规则',
+  '0': '写操作一律拒绝，Agent 不自动做变更',
+  manual: '写操作一律拒绝（同 0）',
+  '1': '起草自动；批准与驳回要人确认',
+  '2': '起草与批准自动；驳回仍要人确认',
+  off: '撤下治理工具：Agent 不参与规则变更（审批上同 0，且第 21 讲的后台任务一并暂停）',
 }
 
 export class FirewallCommand {
@@ -76,15 +76,21 @@ export class FirewallCommand {
       // 事实，而规则从未存在，审计无从发现。
       // 失败**抛错**而不转成字符串：由 dsh 的命令 seam 收敛成 error 结果
       // （见 command-seam.ts），这样失败在人眼里是"错误"而不是一句普通回显。
-      await this.edit.approve(id)
+      // `by` 记下这次批准来自人的命令，而不是 Agent 的工具——审计时能区分两者：
+      // 级别 2 下 Agent 可自动转正，两者的账本事实必须能分开看。
+      await this.edit.approve(id, { by: ACTOR.humanApprove })
       return `已批准 ${id}（candidate → active）`
     }
     if (op === 'reject') {
       const id = rest[0]
-      if (!id) return '用法：/firewall reject <id>'
+      if (!id) return '用法：/firewall reject <id> [理由]'
+      // 理由可选，但**给了就得真进账本**：驳回是留痕归档，"为什么驳回"正是事后唯一
+      // 能回答"这条规则当初该不该下线"的依据。命令参数按空格切开，所以理由（多半
+      // 带空格）要拼回一整句；没给就是 undefined，不写空字符串——空理由等于没说。
+      const reason = rest.slice(1).join(' ').trim() || undefined
       // `by` 记下这次驳回来自人的命令，而不是 Agent 的工具——审计时能区分两者。
       // 驳回是**归档**（留成 rejected 状态）而不是删除：理由见 ledger.ts 的 RuleState。
-      await this.edit.reject(id, { by: '人（/firewall reject）' })
+      await this.edit.reject(id, { by: ACTOR.humanReject, reason })
       return `已驳回 ${id}（state=rejected，保留在账本中）`
     }
     return `未知命令：${cmd}`

@@ -2,14 +2,14 @@
   "sessionId": "sess-1",
   "rules": [
     {
-      "name": "block ip 1.2.3.4",
-      "action": "deny",
+      "name": "block 1.2.3.4",
       "when": {
         "field": "ip",
         "op": "eq",
         "value": "1.2.3.4"
       },
-      "id": "rule-7a9546c1",
+      "action": "deny",
+      "id": "rule-25d948f5",
       "state": "active"
     },
     {
@@ -25,13 +25,13 @@
     },
     {
       "name": "block admin probe",
-      "action": "deny",
       "when": {
         "field": "path",
         "op": "starts_with",
         "value": "/admin"
       },
-      "id": "rule-99b8429d",
+      "action": "deny",
+      "id": "rule-aa489872",
       "state": "active"
     }
   ]

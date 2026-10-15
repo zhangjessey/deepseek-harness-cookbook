@@ -46,10 +46,9 @@ export const ALLOWED_TOOLS: ReadonlySet<string> = new Set(Object.values(GOVERNAN
 /**
  * 放行表：**只有**这里列出的 (级别, 工具) 组合才放行，其余一律拒绝（fail-closed）。
  * 语义与 LEVEL_DESC 一致：
- *  · 0 / manual：每一步都确认，Agent 不自动做变更
- *  · 1：shadow 自动（可以起草候选），但**转正与下线必须人确认**
- *  · 2：新增类过门槛自动（起草 + 转正），但**收窄与下线（reject）必须人确认**
- *  · off：撤下治理工具
+ *  · 0 / manual：写操作一律拒绝，Agent 不自动做变更
+ *  · 1：起草自动（可以起草候选），但**批准与驳回必须人确认**
+ *  · 2：起草与批准都自动，但**驳回（下线，reject）必须人确认**
  * 级别调整（firewall_level）任何级别都不自动放行——Agent 不能给自己提级。
  */
 const ALLOWED_WRITES: Record<AutonomyLevel, ReadonlySet<string>> = {

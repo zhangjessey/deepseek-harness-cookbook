@@ -65,7 +65,7 @@ npm install --legacy-peer-deps
 | 16｜委派任务：Subagent 的创建、协作与回收                 | `src/ch16/` |
 | 17｜编排机制：模型驱动 Workflow 与固定策略 Ralph          | `src/ch17/` |
 | 18｜规则系统：基于 dsh 扩展点搭建引擎                    | `src/firewall/ch18/` |
-| 19｜规则系统：让规则可生成、可修改、可持久化             | `src/firewall/ch19/` |
+| 19｜规则系统：让规则可生成、可审批、可生效               | `src/firewall/ch19/` |
 | 20｜Agent 的规则进化：从异常请求中长出候选规则           | `src/firewall/ch20/` |
 | 21｜Agent 的规则进化：评测、确认与闭环                   | `src/firewall/ch21/` |
 

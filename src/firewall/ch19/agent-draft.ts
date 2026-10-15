@@ -1,6 +1,6 @@
 // src/firewall/ch19/agent-draft.ts —— 用真实 DeepSeek 模型把自然语言意图起草成防火墙规则候选。
 //
-// 这是第19讲"Agent 起草候选"的真实落点：模型读意图，产出结构化的 RuleInput（name/action/when），
+// 这是第19讲"Agent 起草候选"的真实落点：模型读意图，产出结构化的 RuleInput（name/when/action），
 // 之后交给确定性 ledger 走审批链路。
 import { ask, extractJson } from '../shared/llm.ts'
 import type { RuleInput } from './ledger.ts'
@@ -41,8 +41,10 @@ export interface AgentDraftResult {
 
 /** 让真实模型把自然语言意图起草成一条规则候选。 */
 export async function agentDraftRule(intent: string): Promise<AgentDraftResult> {
-  const r = await ask(intent, { system: SYSTEM, maxTokens: 256 })
-  const obj = extractJson<{ name: string; action: string; when: unknown }>(r.text)
+  // 不显式传 maxTokens：让框架注入模型默认值——显式传小值（如 256）曾触发服务端
+  // 返回空 SSE 流（HTTP 200 但零数据事件），模型调用全部伪装成"返回内容为空"。
+  const r = await ask(intent, { system: SYSTEM })
+  const obj = extractJson<{ name: string; when: unknown; action: string }>(r.text)
   if (obj.action !== 'deny' && obj.action !== 'allow') {
     throw new Error('模型返回的 action 非法: ' + obj.action)
   }
@@ -50,7 +52,7 @@ export async function agentDraftRule(intent: string): Promise<AgentDraftResult> 
     throw new Error('模型返回的 when 非法: ' + JSON.stringify(obj.when))
   }
   return {
-    input: { name: obj.name, action: obj.action as 'deny' | 'allow', when: obj.when },
+    input: { name: obj.name, when: obj.when, action: obj.action as 'deny' | 'allow' },
     raw: r.text,
     usage: r.usage,
   }

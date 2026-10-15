@@ -23,7 +23,7 @@ import { AgentLoop } from '@deepseek-ai/dsh-agent-loop'
 import { DeepSeekAdapter, resolveAdapterOptions } from '@deepseek-ai/dsh-llm-deepseek'
 import { getOrCreateAnonymousUserId } from '@deepseek-ai/dsh-anonymous-user-id'
 import { LedgerLogService } from './session-log'
-import { Ledger } from './ledger'
+import { ACTOR, Ledger } from './ledger'
 import { FirewallEdit } from './tool-firewall-edit'
 import { mountApproval } from './approval'
 
@@ -46,11 +46,14 @@ function registerDraftTool(ctx: Context, edit: FirewallEdit): void {
     parameters: { type: 'object', properties: {}, required: [] },
     output,
     execute: async () => {
-      await edit.draftCandidate({
-        name: 'block x',
-        action: 'deny',
-        when: { field: 'path', op: 'starts_with', value: '/admin' },
-      })
+      await edit.draftCandidate(
+        {
+          name: 'block x',
+          action: 'deny',
+          when: { field: 'path', op: 'starts_with', value: '/admin' },
+        },
+        { by: ACTOR.agentDraft },
+      )
       return { result: 'drafted' }
     },
   } as never)
@@ -84,7 +87,7 @@ async function harness(autonomyLevel: string): Promise<{ ctx: Context; ledger: L
     resolveApiKey: async () => assertUsableApiKey(process.env.DEEPSEEK_API_KEY!, 'llm-deepseek', 'DEEPSEEK_API_KEY'),
     resolveUserId: () => getOrCreateAnonymousUserId(),
   })
-  ctx.llm.registerAdapter([PROVIDER], adapter)
+  ;(ctx.llm as any).registerAdapter([PROVIDER], adapter)
 
   const ledger = new Ledger(ctx.ledgerLog, '/tmp/real-agent.json', 'sess-real-agent')
   const edit = new FirewallEdit(ledger)
@@ -105,13 +108,13 @@ test('真模型在真实 agent-loop 里调写工具：级别 2 放行 → 候选
   assert.equal(rules[0]?.state, 'candidate')
 })
 
-test('真模型在真实 agent-loop 里调写工具：off 级别被审批闸 deny → 账本无候选', { skip }, async () => {
-  const { ctx, ledger } = await harness('off')
+test('真模型在真实 agent-loop 里调写工具：0 级别被审批闸 deny → 账本无候选', { skip }, async () => {
+  const { ctx, ledger } = await harness('0')
   const agent = ctx.agentLoop.create(SessionId('a2'), { provider: PROVIDER, model: MODEL })
   agent.followup(createUserMessage({ content: [{ type: 'text', text: GUIDE }], source: { kind: 'user' } }))
   await waitForIdle(ctx, agent)
   await new Promise((r) => setImmediate(r))
 
-  // off 级别下写工具必被 pre-execute 拒绝，无论模型怎么做，账本都不可能有候选。
-  assert.equal(ledger.listRules().length, 0, 'off 级别下写工具被审批闸 deny，账本无候选')
+  // 0 级别下写工具必被 pre-execute 拒绝，无论模型怎么做，账本都不可能有候选。
+  assert.equal(ledger.listRules().length, 0, '0 级别下写工具被审批闸 deny，账本无候选')
 })

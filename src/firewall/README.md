@@ -5,7 +5,7 @@
 | 目录    | 讲次 | 主题                                     |
 | ------- | ---- | ---------------------------------------- |
 | `ch18/` | 18   | 规则系统：基于 dsh 扩展点搭建引擎        |
-| `ch19/` | 19   | 规则系统：让规则可生成，可修改，可持久化  |
+| `ch19/` | 19   | 规则系统：让规则可生成、可审批、可生效    |
 | `ch20/` | 20   | Agent 的规则进化：从异常请求中长出候选规则 |
 | `ch21/` | 21   | Agent 的规则进化：评测，确认与闭环       |
 
@@ -21,7 +21,7 @@
 | 组合包                    | 讲次 | 提供的能力                                                                                                                                   |
 | ------------------------- | ---- | -------------------------------------------------------------------------------------------------------------------------------------------- |
 | `dsh-firewall-rule`       | 18   | 规则引擎 + RE2 匹配器 + 数据面入口 `ctx.ingressAuthz` + 控制面只读工具 `list_rules` / `check_request`                                        |
-| `dsh-firewall-governance` | 19   | 账本（会话日志投影）+ 五个自主级别 + 治理工具 `firewall_list` / `firewall_level` / `firewall_draft` / `firewall_approve` / `firewall_reject` |
+| `dsh-firewall-governance` | 19   | 账本（会话日志投影）+ 三档自主级别 + 治理工具 `firewall_list` / `firewall_level` / `firewall_draft` / `firewall_approve` / `firewall_reject` |
 | `dsh-firewall-evolution`  | 20   | 日志检测 + 脱敏 + 证据注入会话 + 候选生成工具 `firewall_observe` / `firewall_propose`                                                        |
 | `dsh-firewall-eval-loop`  | 21   | 评测（覆盖/精确/误伤）+ 确认三关卡 + 闭环工具 `firewall_evaluate` / `firewall_confirm` / `firewall_loop`                                     |
 

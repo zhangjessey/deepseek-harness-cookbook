@@ -35,13 +35,32 @@ export interface Rule extends RuleInput {
 
 // 三种账本事件，作为"已知载体"写进 dsh 会话日志（不用自定义事件类型——
 // 仓库外插件写自定义事件会让重启后的会话无法加载）。
+//
+// `by` 标注"这次变更来自谁"，来源有三类：人命令、Agent 工具、带外改文件。
+// 缺了它，事后只能看到"规则变了"，分不出是 Agent 自己转正的还是人批准的——
+// 那正是"人掌握决定权"要盯住的地方。只有 `rule.reject` 另外记 `reason`（为什么）。
 export type RuleEvent =
-  | { type: 'rule.add'; id: string; input: RuleInput; at: number; state?: RuleState }
-  | { type: 'rule.update'; id: string; patch: Partial<RuleInput>; at: number; state?: RuleState }
+  | { type: 'rule.add'; id: string; input: RuleInput; at: number; state?: RuleState; by?: string }
+  | { type: 'rule.update'; id: string; patch: Partial<RuleInput>; at: number; state?: RuleState; by?: string }
   // 驳回 / 下线：把规则标成 rejected 并**留在账本里**，同时记下是谁、为什么。
   // `rule.remove` 仍是"删除"（清理），两者不可混用。
   | { type: 'rule.reject'; id: string; at: number; by?: string; reason?: string }
-  | { type: 'rule.remove'; id: string; at: number }
+  | { type: 'rule.remove'; id: string; at: number; by?: string }
+
+/**
+ * 变更来源：标注在账本事件的 `by` 上，审计时用来回答"谁改的"。
+ * 三类：人命令（`/firewall …`）、Agent 工具（`firewall_draft` 等）、带外改文件。
+ * 动作实现（FirewallEdit）被人命令与 Agent 工具**共用**，所以 `by` 只能由调用方标注——
+ * 少了它，"这条规则是 Agent 在级别 2 下自己转正的，还是人批的"事后无从回答。
+ */
+export const ACTOR = {
+  agentDraft: 'Agent（firewall_draft）',
+  agentApprove: 'Agent（firewall_approve）',
+  agentReject: 'Agent（firewall_reject）',
+  humanApprove: '人（/firewall approve）',
+  humanReject: '人（/firewall reject）',
+  outOfBand: '人（带外修改）',
+} as const
 
 // ── 事实校验：读侧与写侧共用**同一份**校验器 ──
 //
@@ -88,13 +107,14 @@ export function isValidRuleEvent(value: unknown): value is RuleEvent {
   if (typeof v.id !== 'string' || v.id === '') return false
   if (typeof v.at !== 'number' || !Number.isFinite(v.at)) return false
   if (v.state !== undefined && (typeof v.state !== 'string' || !RULE_STATES.has(v.state))) return false
+  // by 可选，但**出现了**就必须是字符串：否则"谁改的"读出来是个对象，
+  // 界面无从显示，日志里也就留下一条说不清的事实。
+  if (v.by !== undefined && typeof v.by !== 'string') return false
   switch (v.type) {
     case 'rule.remove':
       return true
     case 'rule.reject':
-      // by / reason 可选，但**出现了**就必须是字符串：否则"被谁驳回"读出来是个对象，
-      // 界面无从显示，日志里也就留下一条说不清的事实。
-      if (v.by !== undefined && typeof v.by !== 'string') return false
+      // reason 同理：出现了就必须是字符串。
       if (v.reason !== undefined && typeof v.reason !== 'string') return false
       return true
     case 'rule.add':
@@ -304,22 +324,36 @@ export class Ledger {
       for (const [id, r] of next) {
         const prev = current.get(id)
         if (!prev) {
-          events.push({ type: 'rule.add', id, input: strip(r), at: Date.now(), state: r.state })
+          events.push({ type: 'rule.add', id, input: strip(r), at: Date.now(), state: r.state, by: ACTOR.outOfBand })
         } else if (!sameRule(prev, r)) {
           if (prev.unless !== undefined && r.unless === undefined) {
             // 人从投影文件里删掉了 unless（收口）：用 remove + add 重建，而不是 update。
             // update 的 patch 无法表达"清除 unless"（JSON 会丢掉 `unless: undefined` 键，
             // 重启后 unless 回弹，收的口子重新打开）。remove+add 让这个意图落成两条
             // 可重放的事实，审计里也能看出"这条规则被重建过"。
-            events.push({ type: 'rule.remove', id, at: Date.now() })
-            events.push({ type: 'rule.add', id, input: strip(r), at: Date.now(), state: r.state })
+            events.push({ type: 'rule.remove', id, at: Date.now(), by: ACTOR.outOfBand })
+            events.push({
+              type: 'rule.add',
+              id,
+              input: strip(r),
+              at: Date.now(),
+              state: r.state,
+              by: ACTOR.outOfBand,
+            })
           } else {
-            events.push({ type: 'rule.update', id, patch: strip(r), at: Date.now(), state: r.state })
+            events.push({
+              type: 'rule.update',
+              id,
+              patch: strip(r),
+              at: Date.now(),
+              state: r.state,
+              by: ACTOR.outOfBand,
+            })
           }
         }
       }
       for (const id of current.keys()) {
-        if (!next.has(id)) events.push({ type: 'rule.remove', id, at: Date.now() })
+        if (!next.has(id)) events.push({ type: 'rule.remove', id, at: Date.now(), by: ACTOR.outOfBand })
       }
       for (const e of events) this.applyEvent(e)
     })

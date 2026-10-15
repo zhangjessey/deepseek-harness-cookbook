@@ -2,7 +2,7 @@
 //
 // 用真实 DeepSeek 模型把自然语言意图起草成规则候选（对应正文"受约束生成"），
 // 再走确定性 ledger 审批链路并断言 facts 一致。这是第19讲"可验证"的实测来源。
-import { Ledger, RuleInput, type FactLog } from '../ledger'
+import { ACTOR, Ledger, RuleInput, type FactLog } from '../ledger'
 import { verifyFacts } from '../facts'
 import { FirewallEdit } from '../tool-firewall-edit'
 import { agentDraftRule } from '../agent-draft.ts'
@@ -19,11 +19,11 @@ export async function runAgentTests(file: string, factLog: FactLog): Promise<str
   const input: RuleInput = draft.input
   log.push(`模型起草候选（intent="${intent}"）→ ${JSON.stringify(input)}`)
   log.push(`模型 token 用量: in=${draft.usage.inputTokens} out=${draft.usage.outputTokens}`)
-  const id = await edit.draftCandidate(input)
+  const id = await edit.draftCandidate(input, { by: ACTOR.agentDraft })
   log.push(`Agent 起草候选 ${id}（state=candidate）`)
 
   // 人审批（级别 1 下转正确认）后批准。
-  await edit.approve(id)
+  await edit.approve(id, { by: ACTOR.humanApprove })
   const state = ledger.listRules().find((r) => r.id === id)?.state
   log.push(`人审批后 ${id} state=${state}`)
 

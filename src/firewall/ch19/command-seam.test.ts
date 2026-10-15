@@ -10,7 +10,7 @@ import { Context } from '@deepseek-ai/cordis'
 import { SessionStore } from '@deepseek-ai/dsh-session'
 import { CommandRuntime } from '@deepseek-ai/dsh-commands'
 import { LedgerLogService } from './session-log'
-import { Ledger, type FactLog, type Rule } from './ledger'
+import { ACTOR, Ledger, type FactLog, type Rule } from './ledger'
 import { FirewallCommand } from './command-firewall'
 import { FirewallEdit } from './tool-firewall-edit'
 import { mountFirewallCommand } from './command-seam'
@@ -47,6 +47,43 @@ test('命令注册进 dsh commands registry，handler 解析执行', async () =>
   assert.ok('text' in result)
 })
 
+test('四个子命令都经命令系统生效，而不只是直接调 handle', async () => {
+  // 其余几条测的是领域逻辑（cmd.handle 直接调用）。这里要验的是"人敲 /firewall xxx"
+  // 这条路本身：rawInput 经 dsh 的 handler 进来，也能落到同一份领域逻辑并真的改状态。
+  // 少了这条，命令即使注册了，也可能是个"注册了但转发坏了"的空壳。
+  const ctx = new Context()
+  await ctx.plugin(SessionStore)
+  await ctx.plugin(LedgerLogService, { sessionId: 'sess-cmd-all' })
+  await ctx.plugin(CommandRuntime)
+  const ledger = new Ledger(ctx.ledgerLog, '/tmp/cmd-all.json', 'sess-cmd-all')
+  const cmd = new FirewallCommand(ledger)
+  mountFirewallCommand(ctx, cmd)
+  await new Promise((r) => setImmediate(r))
+
+  const def = ctx.commands.find(agent as never, 'firewall')
+  assert.ok(def, '命令已注册')
+
+  // level：调整自主级别
+  const lv = await def.handler(invocation(' level 2'))
+  assert.equal(lv.kind, 'success')
+  assert.match('text' in lv ? (lv.text ?? '') : '', /自主级别已设为 2/)
+  assert.equal(cmd.getLevel(), '2', '敲命令真能改级别')
+
+  // approve / reject：先造一个候选
+  const edit = new FirewallEdit(ledger)
+  const id = await edit.draftCandidate(
+    { name: 'block x', action: 'deny', when: { field: 'path', op: 'starts_with', value: '/admin' } },
+    { by: ACTOR.agentDraft },
+  )
+  const approved = await def.handler(invocation(` approve ${id}`))
+  assert.equal(approved.kind, 'success')
+  assert.equal(ledger.listRules().find((r) => r.id === id)?.state, 'active', '敲命令批准真能改状态')
+
+  const rejected = await def.handler(invocation(` reject ${id} 误伤正常流量`))
+  assert.equal(rejected.kind, 'success')
+  assert.equal(ledger.listRules().find((r) => r.id === id)?.state, 'rejected', '敲命令驳回真能改状态')
+})
+
 test('approve / reject 命令真正改账本状态', async () => {
   const ctx = new Context()
   await ctx.plugin(SessionStore)
@@ -72,6 +109,30 @@ test('approve / reject 命令真正改账本状态', async () => {
   // 以前直接删掉，于是"这条规则被谁、何时、为什么驳回"再也回答不了。
   assert.equal(ledger.listRules().length, 1, '驳回后规则仍在账本里（留痕）')
   assert.equal(ledger.listRules()[0].state, 'rejected')
+})
+
+test('账本能回答"谁起草的 / 谁批准的"：人命令与 Agent 工具分得开', async () => {
+  // 起草（Agent 工具）与批准（人命令）复用同一份 FirewallEdit 实现，所以 `by`
+  // 只能由调用方标注。少了它，"这条规则是 Agent 在级别 2 下自己转正的、还是人批的"
+  // 事后无从回答——而那正是"人掌握决定权"要能被审计的部分。
+  const ctx = new Context()
+  await ctx.plugin(SessionStore)
+  await ctx.plugin(LedgerLogService, { sessionId: 'sess-actor' })
+  const ledger = new Ledger(ctx.ledgerLog, '/tmp/actor.json', 'sess-actor')
+  const cmd = new FirewallCommand(ledger)
+  const edit = new FirewallEdit(ledger)
+
+  const id = await edit.draftCandidate(
+    { name: 'block x', action: 'deny', when: { field: 'path', op: 'starts_with', value: '/admin' } },
+    { by: ACTOR.agentDraft },
+  )
+  await cmd.handle(`approve ${id}`)
+
+  const facts = ctx.ledgerLog.facts()
+  const added = facts.find((f) => f.type === 'rule.add' && f.id === id)
+  const approved = facts.find((f) => f.type === 'rule.update' && f.id === id)
+  assert.equal(added?.by, ACTOR.agentDraft, '起草事实要标注 Agent')
+  assert.equal(approved?.by, ACTOR.humanApprove, '批准事实要标注人——两者必须能分开看')
 })
 
 test('驳回留下痕迹：能从账本事实回答"被谁 / 为什么 / 何时驳回"', async () => {
@@ -104,6 +165,28 @@ test('驳回留下痕迹：能从账本事实回答"被谁 / 为什么 / 何时�
   // 重复驳回必须失败：否则日志里躺着两条一模一样的 reject，
   // "到底驳回了一次还是两次"从此说不清。
   await assert.rejects(() => edit.reject(id), /已经是 rejected/)
+})
+
+test('命令带理由驳回：理由与"谁"都进账本，而不是只回显一句"已驳回"', async () => {
+  // 理由必须走**命令文本**也能进账本：驳回是留痕归档，"为什么"是事后唯一能回答
+  // "这条规则当初该不该下线"的依据。命令参数按空格切开，理由要能被拼回一整句。
+  const ctx = new Context()
+  await ctx.plugin(SessionStore)
+  await ctx.plugin(LedgerLogService, { sessionId: 'sess-reject-reason' })
+  const ledger = new Ledger(ctx.ledgerLog, '/tmp/reject-reason.json', 'sess-reject-reason')
+  const cmd = new FirewallCommand(ledger)
+  const edit = new FirewallEdit(ledger)
+
+  const id = await edit.draftCandidate(
+    { name: 'block x', action: 'deny', when: { field: 'path', op: 'starts_with', value: '/admin' } },
+    { by: ACTOR.agentDraft },
+  )
+  await cmd.handle(`reject ${id} 误伤正常流量`)
+
+  const rf = ctx.ledgerLog.facts().find((f) => f.type === 'rule.reject' && f.id === id)
+  assert.ok(rf, '需要找到驳回事实')
+  assert.equal(rf.type === 'rule.reject' ? rf.by : undefined, ACTOR.humanReject, '驳回要标人')
+  assert.equal(rf.type === 'rule.reject' ? rf.reason : undefined, '误伤正常流量', '命令给的理由要进账本')
 })
 
 test('发布失败会传播给调用方，而不是变成 unhandled rejection', async () => {

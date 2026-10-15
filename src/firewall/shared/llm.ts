@@ -86,7 +86,8 @@ async function runtime(): Promise<{ ctx: Context; llm: any }> {
       resolveUserId: () => getOrCreateAnonymousUserId(),
     })
     await ctx.fiber.await()
-    const llm = ctx.get('llm', false)
+    // dsh 的 Context.llm 类型只声明了 generate，运行时 LlmRuntime 实例另有 registerAdapter。
+    const llm = ctx.get('llm', false) as any
     if (!llm) throw new LlmError('unavailable', 'llm 服务不可用（等宿主就绪，重试无益）')
     llm.registerAdapter([PROVIDER], adapter)
     return { ctx, llm }
@@ -111,6 +112,13 @@ async function collect(prepared: any): Promise<AskResult> {
       usage.outputTokens += chunk.usage.outputTokens ?? 0
       usage.cacheReadTokens += chunk.usage.cacheReadTokens ?? 0
     }
+    // adapter 层的错误以 finish chunk 终结（不会抛异常）；不接住它，真实失败会被
+    // 伪装成"内容为空"，排障时彻底失去方向（in/out 均为 0 的假象就是这么来的）。
+    else if (chunk.type === 'finish' && chunk.reason?.kind === 'error') {
+      const failure = chunk.reason.failure
+      const msg = failure?.message ?? String(chunk.reason)
+      throw new LlmError(classifyLlmError(msg), `adapter 失败（code=${failure?.code ?? '?'}）：${msg}`)
+    }
   }
   return { text, usage }
 }
@@ -122,8 +130,16 @@ export async function ask(prompt: string, opts: AskOptions = {}): Promise<AskRes
     ...(opts.system ? [{ role: 'system' as const, content: [{ type: 'text' as const, text: opts.system }] }] : []),
     { role: 'user' as const, content: [{ type: 'text' as const, text: prompt }] },
   ]
+  // maxTokens 不传时让框架注入模型默认值（dsh-llm 的 resolveCallFor 会填
+  // defaultMaxTokens）。实测显式传小值会被服务端以"空 SSE 流"回应（HTTP 200
+  // 但零数据事件），所以这里不做 `?? 1024` 之类的本地默认。
   const prepared = await llm.prepareCall(
-    { provider: PROVIDER, model: MODEL, messages, maxTokens: opts.maxTokens ?? 1024 },
+    {
+      provider: PROVIDER,
+      model: MODEL,
+      messages,
+      ...(opts.maxTokens !== undefined && { maxTokens: opts.maxTokens }),
+    },
     undefined,
   )
 
@@ -155,7 +171,8 @@ export async function ask(prompt: string, opts: AskOptions = {}): Promise<AskRes
       // 上层若拿消息关键字判断是否重试，就会把鉴权失败误判成超时。
       throw new LlmError(
         'empty',
-        '模型返回内容为空。可能原因（按常见程度）：① API key 无效或额度耗尽；' +
+        `模型返回内容为空（usage: in=${result.usage.inputTokens} out=${result.usage.outputTokens}）。` +
+          '可能原因（按常见程度）：① API key 无效或额度耗尽；' +
           '② 流被截断（触达 maxTokens）；③ 连接中断或超时。' +
           '建议先用一次最小请求确认 key 可用，再排查 maxTokens。',
       )
