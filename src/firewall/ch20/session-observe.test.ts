@@ -7,9 +7,10 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { Context } from '@deepseek-ai/cordis'
+import { SessionStore } from '@deepseek-ai/dsh-session'
 import type { MessageId } from '@deepseek-ai/dsh-llm'
 import { sanitize, type NginxLine, type AnomalyKind } from './observe'
-import { EVIDENCE_SOURCE_PLUGIN, mountObserveSession } from './session-observe'
+import { EVIDENCE_SOURCE_PLUGIN, ObserveSessionService } from './session-observe'
 
 const line: NginxLine = {
   ip: '1.2.3.4',
@@ -24,9 +25,16 @@ function raw(kind: AnomalyKind) {
   return { kind, line }
 }
 
-test('证据写进 dsh 会话日志并能读回', async () => {
+/** 直接挂会话服务（不挂持久化）：单测只验证"证据进会话能读回"，不涉及落盘。 */
+async function boot(sessionId: string) {
   const ctx = new Context()
-  await mountObserveSession(ctx, { sessionId: 'sess-ev-1' })
+  await ctx.plugin(SessionStore)
+  await ctx.plugin(ObserveSessionService, { sessionId })
+  return ctx
+}
+
+test('证据写进 dsh 会话日志并能读回', async () => {
+  const ctx = await boot('sess-ev-1')
   const svc = ctx.observeSession
 
   svc.injectEvidence(sanitize(raw('path-probe')))
@@ -39,8 +47,7 @@ test('证据写进 dsh 会话日志并能读回', async () => {
 })
 
 test('读回只采信本插件来源的证据', async () => {
-  const ctx = new Context()
-  await mountObserveSession(ctx, { sessionId: 'sess-ev-2' })
+  const ctx = await boot('sess-ev-2')
   const svc = ctx.observeSession
   svc.injectEvidence(sanitize(raw('bad-ua')))
 
@@ -59,8 +66,7 @@ test('读回只采信本插件来源的证据', async () => {
 })
 
 test('进入会话的是脱敏后的证据：原始 IP 与 UA 不在日志里', async () => {
-  const ctx = new Context()
-  await mountObserveSession(ctx, { sessionId: 'sess-ev-3' })
+  const ctx = await boot('sess-ev-3')
   const svc = ctx.observeSession
   svc.injectEvidence(sanitize(raw('bad-ua')))
 
@@ -71,8 +77,7 @@ test('进入会话的是脱敏后的证据：原始 IP 与 UA 不在日志里', 
 })
 
 test('读回：形状不完整的证据不被采信（只查来源标记是不够的）', async () => {
-  const ctx = new Context()
-  await mountObserveSession(ctx, { sessionId: 'sess-obs-shape' })
+  const ctx = await boot('sess-obs-shape')
   const svc = ctx.observeSession
   svc.injectEvidence({
     kind: 'path-probe',

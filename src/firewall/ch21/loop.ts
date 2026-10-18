@@ -4,6 +4,7 @@
 // 候选转正涉及"自动/灰度"时由第19讲自主级别控制（import 自 ch19 的 AutonomyLevel）。
 import { randomUUID } from 'node:crypto'
 import type { AutonomyLevel } from '../ch19/command-firewall'
+import type { NginxLine } from '../ch20/observe'
 
 export type Stage = 'proposed' | 'shadow' | 'canary' | 'active' | 'rolled_back' | 'aged_out'
 
@@ -67,6 +68,8 @@ export interface Signal {
 export class RuleLifecycle {
   private _stage: Stage = 'proposed'
   private _signal: Signal = { falsePositives: 0, missedTrue: 0, hits: 0, goodTotal: 0 }
+  /** 被放过的请求（漏拦的坏请求）本身——不是计数，是请求，供回接喂回证据库（见 `drainMissed`）。 */
+  private missedLines: NginxLine[] = []
   // 自上次命中以来的观测次数。老化看的是"连续多久没命中"，
   // 而不是累计命中数——否则命中过一次就永远不会老化，与防膨胀的设计意图相反。
   private missesSinceHit = 0
@@ -151,7 +154,9 @@ export class RuleLifecycle {
   }
 
   // 一个请求到达：blocked = 候选是否会拦它；actualBad = 它真是坏的吗（Oracle）。
-  observe(blocked: boolean, actualBad: boolean): void {
+  // line 是原始日志行（可选）：只有"放过"时才留下它——计数只够回答"漏了几次"，
+  // 要让下一轮知道"漏的是**什么**"，必须留住这条请求本身（见 drainMissed）。
+  observe(blocked: boolean, actualBad: boolean, line?: NginxLine): void {
     if (this._stage === 'shadow' || this._stage === 'canary' || this._stage === 'active') {
       if (blocked) {
         this._signal.hits++
@@ -159,12 +164,28 @@ export class RuleLifecycle {
         if (!actualBad) this._signal.falsePositives++ // 误伤：拦了正常的 → 信号
       } else {
         this.missesSinceHit++
-        if (actualBad) this._signal.missedTrue++ // 放过：没拦住坏的 → 信号
+        if (actualBad) {
+          this._signal.missedTrue++ // 放过：没拦住坏的 → 信号
+          if (line) this.missedLines.push(line)
+        }
       }
       // 正常请求无论拦没拦，都计入误伤率的分母（漏了这一行，分母就变成"命中数"了）。
       if (!actualBad) this._signal.goodTotal++
     }
     this.transition()
+  }
+
+  /**
+   * 取出并清空"被放过的请求"（drain 语义），供回接喂回证据库。
+   *
+   * 用 drain 而不是 getter，是为了让"喂过一次"**不可逆**：若同一个漏拦样本每轮都被重复喂回，
+   * 证据库里这一条会越积越多，下一轮模型眼里就只剩它——那正是第 20 讲抗挤占采样要防的
+   * 事（一类刷屏挤掉别类），回接侧不能自己再犯一遍。
+   */
+  drainMissed(): NginxLine[] {
+    const out = this.missedLines
+    this.missedLines = []
+    return out
   }
 
   /**

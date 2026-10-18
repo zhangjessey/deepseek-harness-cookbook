@@ -91,6 +91,12 @@ function usedFields(when: Condition): Set<string> {
 export interface TrafficItem {
   req: HttpRequest
   isBad: boolean // Oracle：检测器判为异常即"该拦"
+  /**
+   * 原始日志行。**刻意保留**：请求侧没有 status（那是响应的字段），
+   * 而回接（`feedback.ts`）构造证据需要它——若拿 HttpRequest 合成，
+   * 回喂出去的 status 就是编的，证据失真，下一轮照着学等于学错。
+   */
+  line: NginxLine
 }
 
 export interface EvalResult {
@@ -231,7 +237,7 @@ export function loadHistoricalTraffic(file: string): TrafficItem[] {
     .map((text) => {
       const line = parseLine(text)
       if (!line) return null
-      return { req: toHttpRequest(line), isBad: detect(line) !== null }
+      return { req: toHttpRequest(line), isBad: detect(line) !== null, line }
     })
     .filter((x): x is TrafficItem => x !== null)
 }

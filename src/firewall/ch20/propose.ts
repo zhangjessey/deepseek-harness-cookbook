@@ -1,8 +1,8 @@
 // src/firewall/ch20/propose.ts —— propose：提案工具与候选校验
 //
-// 对应第20讲"提案工具、校验与它的盲区"：
+// 对应第20讲"提案工具与三关校验"：
 //  • 三种候选：基于路径前缀 / 基于参数模式 / 基于 UA。
-//  • 约束放在代码里（条件树校验复用 ch18 的 `isValidCondition`）+ 两阶段校验。
+//  • 约束放在代码里（条件树校验复用 ch18 的 `isValidCondition`）+ 三关校验。
 //  • 候选由真实 DeepSeek 模型从异常证据中长出，约束写在代码校验里——不是写在提示词里。
 //
 // 【为什么校验器必须是共享的那一份】条件树是 ch18 定义的契约，ch20 长出候选、ch21 评测候选
@@ -34,7 +34,7 @@ function rid(): string {
 }
 
 /**
- * 证据字段的长度上限。既防单条超长证据挤爆上下文，也削掉"把长指令塞进 path / UA"的注入面。
+ * 证据字段的长度上限。既防单条超长证据挤爆上下文，也削掉"把长指令塞进 path"的注入面。
  * 配合下面的转义与定界，是提示注入的第一层缓解（不是唯一一层，见 prompt 里的显式声明）。
  */
 const EVIDENCE_FIELD_MAX = 160
@@ -67,8 +67,8 @@ export interface ProposeOptions {
 export interface ProposeResult {
   candidates: Candidate[]
   /**
-   * 被结构校验拒绝的原始候选。**不静默丢弃**：模型产出了 5 条却只交付 3 条、
-   * 又不说另 2 条为什么没了，是最难查的一类问题。这里连原因一起给出。
+   * 未过前两关（输出结构 / 条件树）被拒绝的原始候选。**不静默丢弃**：模型产出了 5 条
+   * 却只交付 3 条、又不说另 2 条为什么没了，是最难查的一类问题。这里连原因一起给出。
    */
   rejected: Array<{ name: string; why: string }>
   /**
@@ -130,12 +130,13 @@ export async function proposeFromEvidence(
   if (evidence.length === 0) {
     return { candidates: [], rejected: [], ok: true, raw: '', usage: NO_USAGE }
   }
-  // 证据里的 path / UA 是**攻击者可控**的文本：直接拼进提示词，发一条 `GET /admin?<指令>`
-  // 就能让指令原样进入模型上下文。所以逐条转义 + 截断，并显式声明它是数据、不是指令。
+  // 证据里的 **path** 是攻击者可控的文本（UA 已被 sanitize 归成固定类别，不再携带原文）：
+  // 直接拼进提示词，发一条 `GET /admin?<指令>` 就能让指令原样进入模型上下文。
+  // 所以对 path 转义 + 截断，并在提示词里显式声明它是数据、不是指令。
   const brief = evidence
     .map(
       (e) =>
-        `[${e.kind}] method=${e.method} path=${clip(e.path)} status=${e.status} uaClass=${clip(e.uaClass)} ipHash=${e.ipHash}`,
+        `[${e.kind}] method=${e.method} path=${clip(e.path)} status=${e.status} uaClass=${e.uaClass} ipHash=${e.ipHash}`,
     )
     .join('\n')
   const prompt = `以下是从 nginx 日志中检测并脱敏后的异常证据（共 ${evidence.length} 条）。
@@ -171,7 +172,7 @@ ${brief}
   return failed(lastErr instanceof Error ? lastErr.message : String(lastErr))
 }
 
-/** 解析模型输出：逐条过结构校验，被拒的进 rejected（不静默丢弃）。 */
+/** 解析模型输出：逐条过输出结构与条件树校验，被拒的进 rejected（不静默丢弃）。 */
 function parseCandidates(text: string, usage: ProposeResult['usage']): ProposeResult {
   const raw = extractJson<unknown>(text)
   if (!Array.isArray(raw)) {
@@ -200,7 +201,7 @@ function parseCandidates(text: string, usage: ProposeResult['usage']): ProposeRe
   return { candidates, rejected, ok: true, raw: text, usage }
 }
 
-// 阶段1：结构校验（action=deny 且 when 是合法条件树）。
+// 第二关·条件树（validateStage1）：action=deny 且 when 是合法条件树。
 // 校验器用 ch18 的那一份（唯一一份）：它逐项检查 field 是否引擎认识、op 是否在算子白名单内、
 // value 形状是否匹配算子——只查"有没有 field 和 op 这两个键"是拦不住坏候选的。
 export function validateStage1(c: Candidate): boolean {
@@ -213,13 +214,13 @@ export function validateStage1(c: Candidate): boolean {
  */
 function matchesEverything(when: unknown): boolean {
   // 防非对象：模型返回 `when: null` 或字符串时，下面的 `in` 会抛 TypeError 把整条链打挂。
-  // 这里按"不可判定"处理，交给阶段1 的结构校验去拒绝（而不是让调用方崩）。
+  // 这里按"不可判定"处理，交给第二关·条件树去拒绝（而不是让调用方崩）。
   if (typeof when !== 'object' || when === null) return false
   const w = when as Record<string, unknown>
   if ('and' in w) {
-    // 空 `and` 的 every 是真空真 → 命中一切；`and` 命中一切 ⟺ **每个**子条件都命中一切
+    // 空 `and` 的 every 是真空真 → 命中全部请求；`and` 命中全部请求 ⟺ **每个**子条件都命中全部请求
     // （与 neverMatches 的 and 分支对偶：and 永不命中 ⟺ 至少一个子条件永不命中 = some）。
-    // 写 some 会把"混入一个命中一切子条件"的合法候选误判成"拒绝一切"而误杀。
+    // 写 some 会把"混入一个命中全部请求子条件"的合法候选误判成"拒绝一切"而误杀。
     const xs = Array.isArray(w.and) ? (w.and as unknown[]) : []
     return xs.length === 0 || xs.every(matchesEverything)
   }
@@ -229,17 +230,17 @@ function matchesEverything(when: unknown): boolean {
     return xs.some(matchesEverything)
   }
   if ('not' in w) {
-    // `not(X)` 命中一切 ⟺ X 永不命中。原来这里直接 return false（不递归），是漏项。
+    // `not(X)` 命中全部请求 ⟺ X 永不命中。原来这里直接 return false（不递归），是漏项。
     // 注意能静态判的只有"X 作用于未知字段"这一种；"X 等于某个冷门值"要看真实流量里
     // 有没有这个值，得靠回放命中率判定（ch21 评测），本阶段只拦静态可判的形状。
     return neverMatches((w as { not: unknown }).not)
   }
   if (w.op === 'exists') return true
-  // 空串的 contains / starts_with / ends_with 对任何字符串都成立 → 命中一切。
+  // 空串的 contains / starts_with / ends_with 对任何字符串都成立 → 命中全部请求。
   if (w.op === 'contains' || w.op === 'starts_with' || w.op === 'ends_with') {
     return typeof w.value === 'string' && w.value === ''
   }
-  // 未知字段 + ne：取值是 undefined，`undefined !== value` 恒真 → 命中一切。
+  // 未知字段 + ne：取值是 undefined，`undefined !== value` 恒真 → 命中全部请求。
   if (w.op === 'ne') return typeof w.field === 'string' && !isKnownField(w.field)
   return false
 }
@@ -253,7 +254,7 @@ function neverMatches(when: unknown): boolean {
   //     只要有一个子条件永不命中，整体就不会命中（`some`）。
   //   · 引擎 `or` ：空数组的 `some` 是真空假 → **永不命中**。所以空 or 就是"永不命中"；
   //     非空时则要每个子条件都永不命中，整体才永不命中（`every`）。
-  // 写反的后果：`{"not":{"or":[]}}` 会被判成"不会命中一切"而放行，
+  // 写反的后果：`{"not":{"or":[]}}` 会被判成"不会命中全部请求"而放行，
   // 但引擎求值是 `![].some()` = true → 命中全部请求，一旦转正就是全站 403。
   if ('and' in w) {
     const xs = Array.isArray(w.and) ? (w.and as unknown[]) : []
@@ -263,14 +264,14 @@ function neverMatches(when: unknown): boolean {
     const xs = Array.isArray(w.or) ? (w.or as unknown[]) : []
     return xs.length === 0 || xs.every(neverMatches)
   }
-  // 与 matchesEverything 严格对偶：not X 永不命中 ⟺ X 命中一切。
-  // 直接返回 false 会让 `{not:{not:命中一切的X}}` 漏判（它的语义其实是命中一切）。
+  // 与 matchesEverything 严格对偶：not X 永不命中 ⟺ X 命中全部请求。
+  // 直接返回 false 会让 `{not:{not:命中全部请求的X}}` 漏判（它的语义其实是命中全部请求）。
   if ('not' in w) return matchesEverything((w as { not: unknown }).not) // 双重否定不展开，保守处理
   // 已知字段上的普通条件视作"可能命中"；未知字段的 eq/contains/exists 恒假 → 永不命中。
   return typeof w.field === 'string' && !isKnownField(w.field) && w.op !== 'ne'
 }
 
-// 阶段2：语义校验 + 盲区声明。
+// 第三关·命中全部请求（validateStage2）。
 export function validateStage2(c: Candidate): { ok: boolean; notes: string[] } {
   const stage1 = validateStage1(c)
   // 结构不合法时直接返回：下面的语义判断建立在"形状合法"之上，
@@ -284,7 +285,5 @@ export function validateStage2(c: Candidate): { ok: boolean; notes: string[] } {
   const notes: string[] = []
   const broad = matchesEverything(c.when)
   if (broad) notes.push('会空匹配全部请求（语义上等于拒绝一切），必须拒绝')
-  // 盲区：自查发现不了"过窄"——过窄（只命中极少特征）需第21讲评测或人判断。
-  notes.push('盲区：本阶段自查发现不了"过窄"的规则，过窄需第21讲评测或人判断')
   return { ok: !broad, notes }
 }

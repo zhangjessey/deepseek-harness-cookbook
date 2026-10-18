@@ -1,12 +1,12 @@
 # 第 20 讲 · Agent 的规则进化：从异常请求中长出候选规则
 
-本讲进入规则自进化的前半：从 nginx 访问日志发现异常 → 假名化脱敏 → 注入会话成为可追溯证据 → `propose` 长出候选规则并做两阶段校验。后半（评测、确认、闭环）在第 21 讲。
+本讲进入规则自进化的前半：从 nginx 访问日志发现异常 → 假名化脱敏 → 注入会话成为可追溯证据 → `propose` 长出候选规则并做三关校验。后半（评测、确认、闭环）在第 21 讲。
 
 ## 文件清单
 
 - `observe.ts` —— `Observer` + `detect` + `sanitize` + `ObserveSession`：增量读 nginx 日志、三检测器（path-probe / sqli / bad-ua）、抗挤占采样 + 每小时上限、假名化脱敏。领域逻辑，不 import cordis。
-- `session-observe.ts` —— **证据写进 dsh 会话日志**：以插件注入的 `user/message`（来源 `plugin:firewall-observe`）落盘，重启后可加载；读回只采信本插件来源；与 ch19 账本同一载体。
-- `propose.ts` —— `proposeFromEvidence` 三种候选（路径前缀 / 参数模式 / UA）、约束在工具代码里（`isValidCondition`）、两阶段校验（`validateStage1` 结构 / `validateStage2` 语义 + 过窄盲区）。
+- `session-observe.ts` —— **证据写进 dsh 会话日志**：以插件注入的 `user/message`（来源 `plugin:firewall-observe`）落盘，重启后可加载；读回只采信本插件来源；与 ch19 账本同一方式。
+- `propose.ts` —— `proposeFromEvidence` 三种候选（路径前缀 / 参数模式 / UA）、约束在工具代码里（`isValidCondition`）、三关校验（输出结构内联 / `validateStage1` 条件树 / `validateStage2` 命中全部请求）。
 - `access.sample.log` —— 样本 nginx 日志（正常 + 异常混合），自定义格式：`IP - - [time] "METHOD path" status size "ua" "cookie"`。
 - `demo/rule-evolve-demo.ts` —— 可运行入口（`npm run start:ch20`）：装配 observe + propose，跑完整前半链路。
 
@@ -16,16 +16,16 @@
 npm run start:ch20
 ```
 
-需要 `DEEPSEEK_API_KEY`：候选由真实 DeepSeek 模型从脱敏证据中长出（约束仍写在 `propose` 的参数 schema 里）；检测、脱敏、采样、注入会话这几步是纯确定性代码，与模型无关。
+需要 `DEEPSEEK_API_KEY`：候选由真实 DeepSeek 模型从脱敏证据中长出（约束写在 `propose` 的代码校验——`isValidCondition`，见 `ch18/condition.ts`——而不是提示词里）；检测、脱敏、采样、注入会话这几步是纯确定性代码，与模型无关。
 
 跨讲依赖：本讲产出的候选规则遵循 **ch18 的条件树形状**（`when` 结构）；候选经第 21 讲评测后才会落进 **ch19 的账本**（本讲只读日志与会话，不写账本）——所以三讲共用同一个判定内核与形状契约。
 
 测试（Node 内置 test runner，无需额外依赖）：
 
 - `observe.test.ts` —— 三检测器（path-probe / sqli / bad-ua）识别、假名化脱敏、日志行解析、增量读、抗挤占采样与每小时上限
-- `propose.test.ts` —— 两阶段校验（`validateStage1` 结构 / `validateStage2` 语义）与"过窄"盲区
+- `propose.test.ts` —— 三关校验（条件树 / 命中全部请求）
 - `session-observe.test.ts` —— 证据以 `user/message` 写进 dsh 会话日志并能读回；读回只采信本插件来源
-- `propose.e2e.test.ts` —— **真模型**从脱敏证据长出候选 → 两阶段校验全过〔需 key，无 key 自动跳过〕
+- `propose.e2e.test.ts` —— **真模型**从脱敏证据长出候选 → 三关校验全过〔需 key，无 key 自动跳过〕
 
 ```bash
 npm test
@@ -33,24 +33,22 @@ npm test
 
 ## 预期输出
 
-检测、脱敏、采样、注入为确定性步骤；下面"模型原始回复"与候选条目每次运行可能不同，这是一次代表性运行（模型一次给出 9 条候选，此处节选前两条，其余同样两阶段全过）：
+检测、脱敏、采样、注入为确定性步骤；下面"模型原始回复"与候选条目每次运行可能不同（名称、条数、是否漏掉某一类都可能变），这是一次代表性运行（模型一次给出 7 条候选，此处节选前两条，其余同样条件树=通过 命中全部请求=否）：
 
 ```
-=== Agent 长出候选规则（真实模型）===
+=== 模型长出候选规则（真实 DeepSeek）===
 模型原始回复: [
   { "name": "block admin probe", "when": { "field": "path", "op": "starts_with", "value": "/admin" } },
-  { "name": "block wp probe", "when": { "field": "path", "op": "starts_with", "value": "/wp-" } },
-  ...（本次共 9 条：admin / wp / phpmyadmin / 敏感文件 / sqli / ua / 三个 ip）
+  { "name": "block wp-login probe", "when": { "field": "path", "op": "starts_with", "value": "/wp-login" } },
+  ...（本次共 7 条：admin / wp-login / wp-admin / phpmyadmin / etc/passwd / sqli / ua-scanner）
 ]
-模型 token 用量: in=134 out=340
-  cand-1 [block admin probe] when={"field":"path","op":"starts_with","value":"/admin"} 阶段1=true 阶段2=true
-      · 盲区：本阶段自查发现不了"过窄"的规则，过窄需第21讲评测或人判断
-  cand-2 [block wp probe] when={"field":"path","op":"starts_with","value":"/wp-"} 阶段1=true 阶段2=true
-      · 盲区：本阶段自查发现不了"过窄"的规则，过窄需第21讲评测或人判断
-  ...（cand-3 ~ cand-9 同样 阶段1=true 阶段2=true）
+模型 token 用量: in=446 out=267
+  cand-1 [block admin probe] when={"field":"path","op":"starts_with","value":"/admin"} 条件树=通过 命中全部请求=否
+  cand-2 [block wp-login probe] when={"field":"path","op":"starts_with","value":"/wp-login"} 条件树=通过 命中全部请求=否
+  ...（cand-3 ~ cand-7 同样 条件树=通过 命中全部请求=否）
 ```
 
-注意每条候选后面那行"盲区"提示——它是本讲边界的自陈：两阶段校验只查结构与语义，**查不出"规则过窄、拦不住东西"**。那条要靠第 21 讲的历史流量回放来暴露（见 21 讲输出里 `block ua scanner` 命中 0 的真实案例）。
+提示词要求候选覆盖三类异常，但模型不保证照办——这次恰好三类都齐了；换一次运行，名称、条数、是否漏掉某一类都可能变（给不给 UA 类、给几条每次都不同）。这正是"约束只能放在代码侧、不能指望提示词"的例证。
 
 ## 实现细节
 
@@ -75,13 +73,18 @@ npm test
 
 注意脱敏**不影响检测**：`detect` 在脱敏之前就用原始日志行跑完了，sqli 特征照常识别；证据里也有 `kind` 告诉模型这是哪一类异常，规则生成不必"从日志里照抄 payload"。
 
+### 增量读的进度：默认不落盘，且记的是字节偏移
+
+两点容易踩：
+
+- **`persistOffset` 默认 `false`**：演示脚本读的是仓库内的样本文件，落盘会把进度写进源码目录。**不开的代价是进程重启会从头重读全量、并重复注入证据**——这是已知取舍，不是"已支持续读"。真实部署（读 `/var/log/nginx/access.log`）应显式打开它。
+- **进度记 `(inode, size, 字节偏移)` 三元组，不用行号**：行号是相对当前文件内容的位置，一旦轮转（logrotate 的 rename+create 会换 inode）或截断，同样行号就指向另一批内容，轻则重复注入、重则新写入的行整段被跳过（静默丢证据）。三者全对上才算同一份日志的续读；最后一行没写完（撕裂行）也不推进进度。
+
+同理，"每小时"这个采样桶必须来自**日志时间戳**（`$time_local` / `$time_iso8601`）：写死成一个桶的话，配额一打满就永远不再采任何证据，而阈值只看被采样数——进化会**静默停摆**、日志里却看不出原因。
+
 ### 为什么要抗挤占采样 + 每小时上限
 
 两层节流都是防"证据被单一异常灌满"：抗挤占是单类异常占比上限（否则一个扫描器刷屏会把其他异常全挤掉，进化就只看得到一种异常），每小时上限是总量兜底（也防日志被灌爆）。
-
-### 为什么"过窄"的盲区要留到 21 讲
-
-"过窄"指规则本身合法、但拦不住什么东西（比如 `path eq '/phpmyadmin'` 只能拦一个精确路径）。两阶段校验只回答"结构对不对 / 语义通不通"，回答不了"覆盖够不够"——覆盖、精确、误伤这三个指标必须有**历史流量回放**这个固定外部事实才算得出来，那是 21 讲的评测。
 
 ## 本讲的组合包
 
@@ -93,4 +96,3 @@ npm test
 - **检测与脱敏**（`observe.ts`）是纯领域逻辑、不依赖 cordis，因此既可以当普通 TS 模块直接调，也可以包成工具供 Agent 用。
 - **候选生成**必须**有 `tools` 服务**才注册（工具注册在子插件里，主条目不依赖 tools）——与 ch19 同理：数据面不跑 Agent 时没有 `tools` 服务，用 `inject` 就不会因缺服务而加载失败。
 - 两个工具 `firewall_observe` / `firewall_propose` 随包注册：无 `tools` 服务时由子插件 pending（等价于跳过），主条目仍正常激活。
-

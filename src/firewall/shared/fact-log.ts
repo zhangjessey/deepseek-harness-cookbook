@@ -192,6 +192,33 @@ export type FactLogCtor<T> = new (ctx: Context, config: FactLogConfig) => FactLo
 const bootstrapped = new WeakMap<Context, string>()
 
 /**
+ * 按 ctx 去重地挂会话基础设施（SessionStore + JSONL 持久化）。
+ *
+ * ch19 的账本、ch20 的证据、ch21 的闭环事实共用同一套基础设施；同一个 ctx 里可能挂多类，
+ * 所以基础设施**只挂一次**（按 ctx 实例去重）：重复挂载会让后挂的覆盖先挂的 sessions 服务，
+ * 于是先挂的那类事实之后会写进另一个（空的）会话里去——表现为"写进去了、重启后没了"。
+ * 注意不能用 ctx.inject 来探测服务是否已存在：它缺服务时会 pending，而不是返回 false。
+ */
+export async function ensureSessionInfra(ctx: Context, root: string | undefined, logTag: string): Promise<void> {
+  const r = root ?? defaultRoot()
+  const prevRoot = bootstrapped.get(ctx)
+  if (prevRoot === undefined) {
+    await ctx.plugin(SessionStore)
+    // 让权威落盘：挂上之后，写路径的监听器会把每个已提交事件追加进 JSONL。
+    // 没有这一层，会话日志只在内存里，进程退出即消失——重启恢复也就无从谈起。
+    await ctx.plugin(JsonlSessionPersistence, { root: r })
+    bootstrapped.set(ctx, r)
+  } else if (prevRoot !== r) {
+    // 基础设施只有一份，所以本次指定的 root **不会生效**。这必须出声：
+    // 静默取首次值会表现为"明明配了 A，实际却写在 B"，排障时无从下手。
+    ctx.logger?.warn?.(
+      `[${logTag}] 本 ctx 已挂过会话持久化（根目录 ${prevRoot}），本次指定的 ${r} 不会生效。` +
+        `若两类事实要用不同目录，请把它们挂在不同的子 ctx 上。`,
+    )
+  }
+}
+
+/**
  * 供 bundle / demo 挂载：先挂 dsh 的会话服务，再挂事实日志，最后做重启恢复。
  *
  * @param serviceName 服务名（与 Service 子类里传给 super 的名字一致），用于取出实例做 adopt
@@ -203,26 +230,7 @@ export async function mountFactLog<T>(
   config: FactLogConfig,
   opts: { serviceName: string; logTag: string },
 ): Promise<void> {
-  // 会话服务与 JSONL 持久化**只挂一次**（按 ctx 实例去重）：同一个 ctx 里可能挂多类事实
-  // （ch19 的规则事实 + ch21 的闭环事实）。重复挂载会让后挂的覆盖先挂的 sessions 服务，
-  // 于是先挂的那类事实之后会写进另一个（空的）会话里去——表现为"写进去了、重启后没了"。
-  // 注意不能用 ctx.inject 来探测服务是否已存在：它缺服务时会 pending，而不是返回 false。
-  const root = config.root ?? defaultRoot()
-  const prevRoot = bootstrapped.get(ctx)
-  if (prevRoot === undefined) {
-    await ctx.plugin(SessionStore)
-    // 让权威落盘：挂上之后，写路径的监听器会把每个已提交事件追加进 JSONL。
-    // 没有这一层，会话日志只在内存里，进程退出即消失——重启恢复也就无从谈起。
-    await ctx.plugin(JsonlSessionPersistence, { root })
-    bootstrapped.set(ctx, root)
-  } else if (prevRoot !== root) {
-    // 基础设施只有一份，所以本次指定的 root **不会生效**。这必须出声：
-    // 静默取首次值会表现为"明明配了 A，实际却写在 B"，排障时无从下手。
-    ctx.logger?.warn?.(
-      `[${opts.logTag}] 本 ctx 已挂过会话持久化（根目录 ${prevRoot}），本次指定的 ${root} 不会生效。` +
-        `若两类事实要用不同目录，请把它们挂在不同的子 ctx 上。`,
-    )
-  }
+  await ensureSessionInfra(ctx, config.root, opts.logTag)
   await ctx.plugin(Service, config)
 
   // 进程重启：磁盘上已有这个会话就恢复，读不到（首次运行）就保持新建的空会话。

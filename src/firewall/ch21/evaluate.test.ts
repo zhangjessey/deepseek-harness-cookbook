@@ -21,6 +21,16 @@ const cand = (when: unknown): Candidate => ({
 
 const req = (path: string): TrafficItem['req'] => ({ method: 'GET', path, headers: {}, ip: '1.2.3.4', ua: 'u' })
 
+/**
+ * 造一条流量样本。`line`（原始日志行）只有回接（`feedback.ts`）会用到，评测本身不看它，
+ * 所以这里取最小可编译值；真实流量由 `loadHistoricalTraffic` 从日志解析，自带完整 line。
+ */
+const item = (path: string, isBad: boolean): TrafficItem => ({
+  req: req(path),
+  isBad,
+  line: { ip: '1.2.3.4', method: 'GET', path, status: 200, ua: 'u', hasCookie: false },
+})
+
 test('reverseEvidenceKinds：ua → bad-ua，path 含引号 → sqli，path 其他 → path-probe', () => {
   assert.deepEqual(reverseEvidenceKinds(cand({ field: 'ua', op: 'eq', value: 'python' })), ['bad-ua'])
   assert.deepEqual(reverseEvidenceKinds(cand({ field: 'path', op: 'contains', value: "'--" })), ['sqli'])
@@ -28,11 +38,7 @@ test('reverseEvidenceKinds：ua → bad-ua，path 含引号 → sqli，path 其�
 })
 
 test('evaluate：覆盖 / 精确 / 误伤全命中', () => {
-  const traffic: TrafficItem[] = [
-    { req: req('/admin'), isBad: true },
-    { req: req('/admin'), isBad: true },
-    { req: req('/ok'), isBad: false },
-  ]
+  const traffic: TrafficItem[] = [item('/admin', true), item('/admin', true), item('/ok', false)]
   const r = evaluate(cand({ field: 'path', op: 'starts_with', value: '/admin' }), traffic)
   assert.equal(r.totalBad, 2)
   assert.equal(r.caughtBad, 2)
@@ -45,8 +51,8 @@ test('evaluate：覆盖 / 精确 / 误伤全命中', () => {
 
 test('evaluate：误伤拉低精确率、推高误伤率', () => {
   const traffic: TrafficItem[] = [
-    { req: req('/admin'), isBad: true },
-    { req: req('/admin'), isBad: false }, // 拦了一条正常请求 → 误伤
+    item('/admin', true),
+    item('/admin', false), // 拦了一条正常请求 → 误伤
   ]
   const r = evaluate(cand({ field: 'path', op: 'starts_with', value: '/admin' }), traffic)
   assert.equal(r.caughtBad, 1)
@@ -108,10 +114,7 @@ test('回放请求不再被压成空壳：query 从 URI 拆出，query.<name> �
 })
 
 test('依赖样本提供不了的字段（body）时，标为"无法评估"，不是"命中 0 = 无用"', () => {
-  const traffic: TrafficItem[] = [
-    { req: req('/admin'), isBad: true },
-    { req: req('/ok'), isBad: false },
-  ]
+  const traffic: TrafficItem[] = [item('/admin', true), item('/ok', false)]
   const r = evaluate(cand({ field: 'body', op: 'contains', value: 'x' }), traffic)
   // 访问日志不记请求体：这个样本**评不了**这条候选。若当成"命中 0"，风险关卡会
   // 判它"拦不住任何东西"而拒绝——那是误杀，所以必须走"样本不足"。
@@ -125,8 +128,8 @@ test('EvalResult 声明 Oracle 来源（避免把"复现度"误读成真实防�
   // 一条比检测器更准（抓到检测器漏掉的攻击）的规则会被记成误伤。
   // 所以结果里必须写清 Oracle 是谁，让调用方知道这个局限。
   const r = evaluate(cand({ field: 'path', op: 'starts_with', value: '/admin' }), [
-    { req: req('/admin'), isBad: true },
-    { req: req('/ok'), isBad: false },
+    item('/admin', true),
+    item('/ok', false),
   ])
   assert.ok(r.oracle.includes('ch20'), `oracle 应说明来源，实际：${r.oracle}`)
   assert.ok(r.oracle.includes('复现度'), '应点明这是复现度，不是独立 ground truth')

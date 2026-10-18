@@ -102,7 +102,7 @@ export function checkRisk(c: Candidate, evalResult: EvalResult): GateResult {
       pass: false,
       reason:
         `误伤率 ${(evalResult.falsePositiveRate * 100).toFixed(1)}% 过高，需人确认` +
-        `（注意 Oracle 是第 20 讲的启发式检测器：误伤也可能只是这条候选**比检测器更准**，` +
+        `（注意 Oracle 是第 20 讲的启发式检测器：误伤也可能只是这条候选比检测器更准，` +
         `请人工复核后再决定，不要直接当成坏规则）`,
     }
   }

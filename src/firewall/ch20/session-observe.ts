@@ -9,9 +9,10 @@
 // 形状不合法就忽略），所以"证据"和"发布事实"能落在同一条日志里对账——
 // 复盘时可以沿证据链往回追溯：某条候选是依据哪一批证据长出来的。
 import { Context, Service } from '@deepseek-ai/cordis'
-import { SessionStore, type Session, type SessionId } from '@deepseek-ai/dsh-session'
+import type { Session, SessionId } from '@deepseek-ai/dsh-session'
 import type { MessageId } from '@deepseek-ai/dsh-llm'
 import { renderEvidence, type SanitizedEvidence } from './observe'
+import { ensureSessionInfra } from '../shared/fact-log'
 
 export const EVIDENCE_SOURCE_PLUGIN = 'firewall-observe'
 const EVIDENCE_MARKER = 'firewall-observe evidence'
@@ -24,6 +25,8 @@ declare module '@deepseek-ai/cordis' {
 
 export interface ObserveSessionConfig {
   sessionId: string
+  /** 会话日志的持久化根目录（JSONL），默认 `.dsh-sessions`。 */
+  root?: string
 }
 
 /**
@@ -67,6 +70,11 @@ export class ObserveSessionService extends Service {
     return this._session
   }
 
+  /** 重启恢复时采用一个从磁盘读回的会话（见 mountObserveSession）。 */
+  adopt(session: Session): void {
+    this._session = session
+  }
+
   /** 证据脱敏后进入会话——脱敏必须在进会话之前做完，因为它会永久留在日志里。 */
   injectEvidence(ev: SanitizedEvidence): void {
     this.session.append(
@@ -108,8 +116,22 @@ export class ObserveSessionService extends Service {
   }
 }
 
-/** 挂载：先挂 dsh 的会话服务，再挂证据会话。 */
+/** 挂载：先挂 dsh 的会话基础设施（含 JSONL 持久化），再挂证据会话，最后做重启恢复。 */
 export async function mountObserveSession(ctx: Context, config: ObserveSessionConfig): Promise<void> {
-  await ctx.plugin(SessionStore)
+  await ensureSessionInfra(ctx, config.root, 'firewall-observe')
   await ctx.plugin(ObserveSessionService, config)
+  // 重启恢复：磁盘上已有这个会话就恢复，读不到（首次运行）就保持新建的空会话。
+  await ctx.inject(['sessionPersistence', 'sessions', 'observeSession'] as never, async (c) => {
+    try {
+      const prep = await c.sessionPersistence.prepare(config.sessionId as SessionId)
+      c.observeSession.adopt(prep.session)
+      c.sessions.enter(prep.session)
+      c.sessions.announce(prep.session)
+    } catch (err) {
+      // 只有"这个会话还没有落盘记录"（首次运行）才适合静默沿用新建会话；其余失败
+      // （格式不兼容 / JSONL 损坏 / 权限问题）要出声，而不是带着不完整的证据继续。
+      const reason = err instanceof Error ? err.message : String(err)
+      ctx.logger?.warn?.(`[firewall-observe] 会话日志恢复失败（若非首次运行，证据可能不完整）：${reason}。`)
+    }
+  })
 }

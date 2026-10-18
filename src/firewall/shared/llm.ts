@@ -51,7 +51,17 @@ export function classifyLlmError(err: unknown): LlmErrorCode {
   const msg = err instanceof Error ? err.message : String(err)
   if (/timeout|ETIMEDOUT|超时/i.test(msg)) return 'timeout'
   if (/ECONNRESET|ECONNREFUSED|ENOTFOUND|fetch failed|socket hang up|network/i.test(msg)) return 'network'
-  if (/401|403|unauthorized|forbidden|invalid\s+(api\s+)?key|鉴权/i.test(msg)) return 'auth'
+  // 鉴权。第三条不可省：DeepSeek 侧的真实消息是 "Authentication Fails, Your api key:
+  // **** is invalid, please check your api key."——"invalid" 出现在 key **之后**，
+  // 只写 `invalid ... key` 这种顺序匹配不上，会漏成 `unknown`，让"按码说话"这条承诺
+  // 在最常见的失败（key 无效 / 额度耗尽）上恰好失效。
+  if (
+    /401|403|unauthorized|forbidden|authentication fail|鉴权/i.test(msg) ||
+    /\b(invalid|incorrect|expired)\s+(api\s+)?key\b/i.test(msg) ||
+    /\bapi[_\s-]?key\b[^\n]*\b(invalid|incorrect|expired|无效)\b/i.test(msg)
+  ) {
+    return 'auth'
+  }
   return 'unknown'
 }
 

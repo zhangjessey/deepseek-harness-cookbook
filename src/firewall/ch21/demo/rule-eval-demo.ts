@@ -5,12 +5,33 @@
 import { fileURLToPath } from 'node:url'
 import { Observer, ObserveSession } from '../../ch20/observe'
 import { proposeFromEvidence } from '../../ch20/propose'
-import { evaluate, loadHistoricalTraffic, wouldBlock } from '../evaluate'
+import { evaluate, loadHistoricalTraffic, wouldBlock, type EvalResult } from '../evaluate'
 import { confirmCandidate } from '../confirm'
 import { RuleLifecycle } from '../loop'
+import { feedMissedToEvidence } from '../feedback'
+import type { Candidate } from '../../ch20/propose'
 
 function pct(x: number): string {
   return (x * 100).toFixed(1) + '%'
+}
+
+/**
+ * 命中 0 的候选，原因**不止一种**——提示必须按候选针对的异常类别分开给。
+ *
+ * 统一说"按归类值生成"会把 sqli 的真实原因带偏：它命中 0 不是因为归类值，
+ * 而是注入特征在**查询参数的值**里，回放时 "?" 之后被拆进 query 字段、
+ * path 只剩主干，于是 path contains '--' 根本匹配不到
+ * （实测 query.q contains '--' 覆盖 11.1%）。
+ */
+function weakHint(r: EvalResult): string {
+  if (r.caughtBad + r.caughtGood !== 0) return ''
+  if (r.evidenceKinds.includes('bad-ua')) {
+    return '  ⚠ 未命中任何流量：when 按脱敏的“归类值”（如 scanner）生成，而引擎匹配的是原始 ua 字符串（如 python-requests/2.28），需改回匹配原始 ua 才生效'
+  }
+  if (r.evidenceKinds.includes('sqli')) {
+    return "  ⚠ 未命中任何流量：注入特征在查询参数的“值”里，回放时 ? 之后会拆进 query 字段、path 只剩主干，故 path contains '--' 匹配不到；需作用于 query.<参数名>（如 query.q contains '--'，实测覆盖 11.1%）"
+  }
+  return '  ⚠ 未命中任何流量'
 }
 
 async function main(): Promise<void> {
@@ -41,12 +62,8 @@ async function main(): Promise<void> {
   console.log('\n=== 评测三件事（覆盖 / 精确 / 误伤）+ 事实校验 ===')
   const results = candidates.map((c) => evaluate(c, traffic))
   for (const r of results) {
-    const weak =
-      r.caughtBad + r.caughtGood === 0
-        ? '  ⚠ 未命中任何流量：该候选的 when 按"归类值"生成，需改回匹配原始 ua（如 ua contains）才生效'
-        : ''
     console.log(
-      `  ${r.candidateId} [${r.candidateName}] 覆盖=${pct(r.coverage)} 精确=${pct(r.precision)} 误伤率=${pct(r.falsePositiveRate)} 逆推=[${r.evidenceKinds.join(',')}] 事实校验=${r.factCheck.ok ? 'ok' : 'FAIL'}${weak}`,
+      `  ${r.candidateId} [${r.candidateName}] 覆盖=${pct(r.coverage)} 精确=${pct(r.precision)} 误伤率=${pct(r.falsePositiveRate)} 逆推=[${r.evidenceKinds.join(',')}] 事实校验=${r.factCheck.ok ? 'ok' : 'FAIL'}${weakHint(r)}`,
     )
   }
 
@@ -100,6 +117,32 @@ async function main(): Promise<void> {
   const goodReq = traffic.find((t) => !t.isBad)!.req
   lc3.observe(wouldBlock(trap, goodReq), false)
   console.log(`  误拦正常请求后: ${lc3.report()}`)
+
+  // 8) 回接：把"漏拦"喂回证据库——跨轮进化闭环的最后一环。
+  // 少了它，下一轮提案看到的仍是同一批原始日志：上一轮漏掉了什么，下一轮并不知道。
+  console.log('\n=== 回接：漏掉的攻击喂回证据库（闭合跨轮进化）===')
+  const narrow: Candidate = {
+    id: 'narrow-1',
+    name: 'block admin only',
+    action: 'deny',
+    when: { field: 'path', op: 'eq', value: '/admin' },
+  }
+  // staleHits 调大：这条窄候选会漏掉样本里大部分异常，按默认 3 早就老化了；
+  // 这里要看的是"漏掉的东西被喂回去"，不是老化（老化在上面单独演示过）。
+  const lc4 = new RuleLifecycle({ autonomyLevel: '2', fpThreshold: 0.02, staleHits: 999 })
+  lc4.init(true)
+  for (const t of traffic) lc4.observe(wouldBlock(narrow, t.req), t.isBad, t.line)
+  const missed = lc4.getSignal().missedTrue
+  const before = session.messages().length
+  const injected = feedMissedToEvidence(session, lc4)
+  console.log(`  窄候选（只拦 /admin）回放后: ${lc4.report()}`)
+  console.log(`  漏拦 ${missed} 条 → 脱敏后喂回证据库 ${injected} 条`)
+  console.log(`  证据库: ${before} 条 → ${session.messages().length} 条`)
+  for (const m of session.messages().slice(before).slice(0, 2)) {
+    console.log(`    user: ${m.content.slice(0, 88)}…`)
+  }
+  // drain 语义：同一批漏拦不会被每轮重复喂回（否则这一条越积越多，把别的信号全挤掉）
+  console.log(`  再喂一次: ${feedMissedToEvidence(session, lc4)} 条（drain 后不再重复）`)
 }
 
 main().catch((err) => {
