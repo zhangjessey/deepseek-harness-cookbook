@@ -1,7 +1,7 @@
-// src/firewall/ch21/evaluate.ts —— 评测：覆盖 / 精确 / 误伤；历史流量回放；事实校验；从候选逆推证据
+// src/firewall/ch21/evaluate.ts —— 评测：覆盖率 / 精确率 / 误伤率；历史流量回放；事实校验；从候选逆推证据
 //
 // 对应第21讲"评测三件事"：评测要回答"候选真能拦吗"——靠历史流量回放（复用 ch18 纯函数引擎，
-// 确定性、可回放），给出覆盖（recall）、精确（precision）、误伤（false positive）；
+// 确定性、可回放），给出覆盖率（coverage）、精确率（precision）、误伤率（false positive rate）；
 // 并用事实校验（回放计数自洽）+ 从候选逆推证据（候选的 when 能覆盖哪些异常证据）对齐。
 import { existsSync, readFileSync } from 'node:fs'
 import { leavesOf } from '../ch18/condition.ts'
@@ -93,7 +93,7 @@ export interface TrafficItem {
   isBad: boolean // Oracle：检测器判为异常即"该拦"
   /**
    * 原始日志行。**刻意保留**：请求侧没有 status（那是响应的字段），
-   * 而回接（`feedback.ts`）构造证据需要它——若拿 HttpRequest 合成，
+   * 而喂回（`feedback.ts`）构造证据需要它——若拿 HttpRequest 合成，
    * 回喂出去的 status 就是编的，证据失真，下一轮照着学等于学错。
    */
   line: NginxLine
@@ -105,10 +105,10 @@ export interface EvalResult {
   total: number
   totalBad: number
   totalGood: number
-  caughtBad: number // 覆盖的"该拦"数
-  caughtGood: number // 误伤的"正常"数
-  coverage: number // 覆盖 = caughtBad / totalBad
-  precision: number // 精确 = caughtBad / (caughtBad + caughtGood)
+  caughtBad: number // 覆盖率的"该拦"数
+  caughtGood: number // 误伤率的"正常"数
+  coverage: number // 覆盖率 = caughtBad / totalBad
+  precision: number // 精确率 = caughtBad / (caughtBad + caughtGood)
   falsePositiveRate: number // 误伤率 = caughtGood / totalGood
   evidenceKinds: string[] // 从候选逆推的异常类别
   // 样本是否足以支撑结论：坏样本或正常样本为 0 时，误伤率/覆盖率算出来都是 0，
@@ -145,7 +145,7 @@ export function reverseEvidenceKinds(c: Candidate): string[] {
   return kinds.size > 0 ? [...kinds] : ['unknown']
 }
 
-// 评测一个候选：对每条历史流量回放（ch18 引擎），统计覆盖/精确/误伤。
+// 评测一个候选：对每条历史流量回放（ch18 引擎），统计覆盖率/精确率/误伤率。
 export function evaluate(candidate: Candidate, traffic: TrafficItem[]): EvalResult {
   let totalBad = 0
   let totalGood = 0

@@ -6,12 +6,12 @@
 // 安装：dsh plugin --profile <name> add ./packages/dsh-firewall-eval-loop
 //
 // 本讲落点（详见 ch21 正文）：候选"真能拦吗"靠历史流量回放评测三件事（覆盖/精确/误伤）+ 事实校验
-// + 从候选逆推证据；转正前过确认三关卡（命名/意图/风险，关卡写在工具代码里）；上线后进入生命周期
+// + 从候选逆推证据；转正前过候选确认（命名/意图/风险，确认写在工具代码里）；上线后进入生命周期
 // 管理（shadow/灰度/active/老化/自动回退），候选转正涉及"自动/灰度"时由第19讲的自主级别控制。
 //
-// 【关卡为什么必须由服务端算】确认三关卡吃的是评测算出的误伤率。如果让模型把 evalResult 当参数
-// 传进来，模型只要传一个 `falsePositiveRate: 0` 就能让 100% 误伤的候选"确定性地"通过风险关卡——
-// 关卡就成了装饰。所以三个工具一律**服务端**跑 evaluate → confirm，模型只能给候选与样本路径。
+// 【确认为什么必须由服务端算】候选确认吃的是评测算出的误伤率。如果让模型把 evalResult 当参数
+// 传进来，模型只要传一个 `falsePositiveRate: 0` 就能让 100% 误伤的候选"确定性地"通过风险检查——
+// 确认就成了装饰。所以三个工具一律**服务端**跑 evaluate → confirm，模型只能给候选与样本路径。
 import { Context } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { evaluate, loadHistoricalTraffic, wouldBlock, type EvalResult } from '../../../src/firewall/ch21/evaluate'
@@ -131,12 +131,12 @@ export function apply(ctx: Context, config: EvalLoopConfig = {}): void {
         }),
       )
 
-      // 工具二：确认三关卡（命名/意图/风险）。evalResult 由服务端现算，不接受模型传入。
+      // 工具二：候选确认（命名/意图/风险）。evalResult 由服务端现算，不接受模型传入。
       c.tools.register(
         defineTool({
           name: 'firewall_confirm',
           description:
-            '对候选规则跑确认三关卡（命名/意图/风险）。评测结果由服务端现算（不接受模型传入），因此风险关卡无法被伪造的误伤率骗过。',
+            '对候选规则跑候选确认（命名/意图/风险）。评测结果由服务端现算（不接受模型传入），因此风险检查无法被伪造的误伤率骗过。',
           parameters: {
             candidate: {
               type: 'object',
@@ -181,12 +181,12 @@ export function apply(ctx: Context, config: EvalLoopConfig = {}): void {
 
       // 工具三：闭环生命周期（shadow/灰度/active/老化/自动回退）。
       // 关键：`init` 的 autoConfirmAllowed 来自**真实的确认结果**，不是写死 true——
-      // 三关没全过的候选只能停在 shadow，不能进灰度。
+      // 确认没全过的候选只能停在 shadow，不能进灰度。
       c.tools.register(
         defineTool({
           name: 'firewall_loop',
           description:
-            '闭环生命周期：先服务端跑评测与确认三关卡，三关全过才允许进灰度，然后按这条请求的观测推进 shadow/灰度/active/老化/自动回退。',
+            '闭环生命周期：先服务端跑评测与候选确认，确认全过才允许进灰度，然后按这条请求的观测推进 shadow/灰度/active/老化/自动回退。',
           parameters: {
             candidate: {
               type: 'object',
@@ -211,7 +211,7 @@ export function apply(ctx: Context, config: EvalLoopConfig = {}): void {
             const candidate = requireCandidate(args.candidate)
             const level = requireLevel(args.autonomyLevel)
             const traffic = loadHistoricalTraffic(String(args.trafficFile))
-            // 强制链：先评测，再确认，只有三关全过才允许自动转正。
+            // 强制链：先评测，再确认，只有确认全过才允许自动转正。
             const evalResult: EvalResult = evaluate(candidate, traffic)
             const report = confirmCandidate(candidate, evalResult)
 
@@ -236,7 +236,7 @@ export function apply(ctx: Context, config: EvalLoopConfig = {}): void {
             //
             // 不接受模型传入这两个值：否则模型只要恒传 `actualBad=true`，
             // 误伤率就永远是 0、误伤计数恒为 0 → **自动回退永不触发**。
-            // 这与"三关卡必须由服务端算"是同一个原则：让被约束方自己报告判定依据，
+            // 这与"候选确认必须由服务端算"是同一个原则：让被约束方自己报告判定依据，
             // 那道闸门就成了装饰。
             for (const item of traffic) lc.observe(wouldBlock(candidate, item.req), item.isBad)
 
@@ -251,8 +251,8 @@ export function apply(ctx: Context, config: EvalLoopConfig = {}): void {
               report,
               eval: evalResult,
               note: report.pass
-                ? '三关卡全过：允许按自主级别推进。'
-                : `三关卡未全过（${[report.naming, report.intent, report.risk]
+                ? '候选确认全过：允许按自主级别推进。'
+                : `候选确认未全过（${[report.naming, report.intent, report.risk]
                     .filter((g) => !g.pass)
                     .map((g) => g.reason)
                     .join('；')}）：候选停在 ${lc.getStage()}，未进灰度。`,

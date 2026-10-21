@@ -1,6 +1,6 @@
 // src/firewall/ch21/loop.ts —— 闭环：shadow / 灰度 / 自动回退 / 老化 + 连续实验（误伤、放过都变信号）
 //
-// 对应第21讲"规则上线后在放了坏事与误伤之间持续平衡"：候选转正后进入生命周期管理。
+// 对应第21讲"规则转正后在放了坏事与误伤之间持续平衡"：候选转正后进入生命周期管理。
 // 候选转正涉及"自动/灰度"时由第19讲自主级别控制（import 自 ch19 的 AutonomyLevel）。
 import { randomUUID } from 'node:crypto'
 import type { AutonomyLevel } from '../ch19/command-firewall'
@@ -26,7 +26,7 @@ const TRANSITIONS: Record<Stage, readonly Stage[]> = {
   // 灰度期：达标转 active；误伤超阈值自动回退；长期无命中老化。
   canary: ['active', 'rolled_back', 'aged_out'],
   active: ['rolled_back', 'aged_out'],
-  rolled_back: [], // 终态：不可复活，要重新上线就重新走一遍流程
+  rolled_back: [], // 终态：不可复活，要重新转正就重新走一遍流程
   aged_out: [], // 终态
 }
 
@@ -38,6 +38,14 @@ export interface LoopConfig {
   fpThreshold: number // 灰度期误伤率上限，超则自动回退
   staleHits: number // 连续无命中达到此数 → 老化
   /**
+   * 灰度期累计命中达到此数 → 转 active（默认 3）。
+   *
+   * 与 `staleHits` 是两个方向相反的阈值：`staleHits` 是"连续**无**命中"多少次要老化，
+   * 这个是"累计**有**命中"多少次就认为观察够了、可以全量。写死成 3 的话，调用方
+   * （demo / 测试）想调灰度观察强度就无处下手——所以和其他阈值一样配置化。
+   */
+  promoteHits?: number
+  /**
    * 启用"误伤率超阈值即回退"所需的**最小正常样本数**，默认 20。
    *
    * 没有这个门槛时，`goodTotal === 1` 的那一次误伤算出来是 100%，
@@ -46,6 +54,9 @@ export interface LoopConfig {
    */
   minGoodTotal?: number
 }
+
+/** 默认的灰度转 active 命中数（见 LoopConfig.promoteHits）。 */
+export const DEFAULT_PROMOTE_HITS = 3
 
 /** 默认的最小正常样本数（见 LoopConfig.minGoodTotal）。 */
 export const DEFAULT_MIN_GOOD_TOTAL = 20
@@ -68,7 +79,7 @@ export interface Signal {
 export class RuleLifecycle {
   private _stage: Stage = 'proposed'
   private _signal: Signal = { falsePositives: 0, missedTrue: 0, hits: 0, goodTotal: 0 }
-  /** 被放过的请求（漏拦的坏请求）本身——不是计数，是请求，供回接喂回证据库（见 `drainMissed`）。 */
+  /** 被放过的请求（漏拦的坏请求）本身——不是计数，是请求，供喂回证据库（见 `drainMissed`）。 */
   private missedLines: NginxLine[] = []
   // 自上次命中以来的观测次数。老化看的是"连续多久没命中"，
   // 而不是累计命中数——否则命中过一次就永远不会老化，与防膨胀的设计意图相反。
@@ -141,7 +152,7 @@ export class RuleLifecycle {
       case '2':
         this.setStage(
           autoConfirmAllowed ? 'canary' : 'shadow',
-          autoConfirmAllowed ? 'init：确认三关卡全过，进灰度' : 'init：确认三关卡未全过，停在影子',
+          autoConfirmAllowed ? 'init：候选确认全过，进灰度' : 'init：候选确认未全过，停在影子',
         )
         break
       default: {
@@ -176,11 +187,11 @@ export class RuleLifecycle {
   }
 
   /**
-   * 取出并清空"被放过的请求"（drain 语义），供回接喂回证据库。
+   * 取出并清空"被放过的请求"（drain 语义），供喂回证据库。
    *
    * 用 drain 而不是 getter，是为了让"喂过一次"**不可逆**：若同一个漏拦样本每轮都被重复喂回，
    * 证据库里这一条会越积越多，下一轮模型眼里就只剩它——那正是第 20 讲抗挤占采样要防的
-   * 事（一类刷屏挤掉别类），回接侧不能自己再犯一遍。
+   * 事（一类刷屏挤掉别类），喂回侧不能自己再犯一遍。
    */
   drainMissed(): NginxLine[] {
     const out = this.missedLines
@@ -233,7 +244,7 @@ export class RuleLifecycle {
           `（不足 ${minGood} 条）：暂不判定回退，继续观察`
       }
       // 灰度达标转 active：与误伤率门槛**无关**，不能被样本不足一并卡住。
-      if (this._stage === 'canary' && this._signal.hits >= 3) {
+      if (this._stage === 'canary' && this._signal.hits >= (this.cfg.promoteHits ?? DEFAULT_PROMOTE_HITS)) {
         this.setStage('active', `灰度达标：命中 ${this._signal.hits} 次`)
       }
     }

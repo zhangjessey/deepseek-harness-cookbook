@@ -67,7 +67,7 @@ npm install --legacy-peer-deps
 | 18｜规则系统：基于 dsh 扩展点搭建引擎                    | `src/firewall/ch18/` |
 | 19｜规则系统：让规则可生成、可审批、可生效               | `src/firewall/ch19/` |
 | 20｜Agent 的规则进化：从异常请求中长出候选规则           | `src/firewall/ch20/` |
-| 21｜Agent 的规则进化：评测、确认与闭环                   | `src/firewall/ch21/` |
+| 21｜Agent 的规则进化：评测与闭环                       | `src/firewall/ch21/` |
 
 ```bash
 # 第 01–04 章
@@ -122,7 +122,7 @@ npm run start:ch12:admission
 | `dsh-firewall-rule` | 18 | 规则引擎 + 数据面入口 `ctx.ingressAuthz` + 控制面只读工具 `list_rules` / `check_request` |
 | `dsh-firewall-governance` | 19 | 账本（会话日志投影）+ 五个自主级别 + 治理工具 `firewall_list` / `level` / `draft` / `approve` / `reject` |
 | `dsh-firewall-evolution` | 20 | 日志检测 + 脱敏 + 证据注入会话 + 候选生成工具 `firewall_observe` / `firewall_propose` |
-| `dsh-firewall-eval-loop` | 21 | 评测（覆盖/精确/误伤）+ 确认三关卡 + 闭环工具 `firewall_evaluate` / `confirm` / `loop` |
+| `dsh-firewall-eval-loop` | 21 | 评测（覆盖/精确/误伤）+ 候选确认 + 闭环工具 `firewall_evaluate` / `firewall_confirm` / `firewall_loop` |
 
 ```bash
 # 单独运行四讲 demo（无需 dsh、无需 API key）

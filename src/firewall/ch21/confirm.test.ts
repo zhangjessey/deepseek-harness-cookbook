@@ -1,7 +1,7 @@
-// src/firewall/ch21/confirm.test.ts —— 确认三关卡（命名/意图/风险）的单元测试
+// src/firewall/ch21/confirm.test.ts —— 候选确认（命名/意图/风险）的单元测试
 //
-// 覆盖"候选转正前过三关"的确定性部分：命名可读、意图与 when 对齐、风险可控，
-// 以及三关合成。
+// 覆盖"候选转正前过三道检查"的确定性部分：命名可读、意图与 when 对齐、风险可控，
+// 以及三道检查合成。
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import type { Condition } from '../ch18/types'
@@ -72,7 +72,7 @@ test('checkRisk：误伤率过高拒绝', () => {
   assert.equal(checkRisk(cand('block x', { field: 'path', op: 'eq', value: '/x' }), high).pass, false)
 })
 
-test('checkRisk：命中 0 次的候选拒绝（覆盖 0% 不代表"零误伤"，只代表什么都没拦）', () => {
+test('checkRisk：命中 0 次的候选拒绝（覆盖率 0% 不代表"零误伤"，只代表什么都没拦）', () => {
   // demo 里的 cand-7（ua eq 'scanner'）正是这种：覆盖率 0.0%、命中 0 次，却曾三关全过
   // 并被当作"健康推进"送进灰度。一条拦不住任何东西的规则没有任何价值，
   // 它"零误伤"只是因为一次都没生效。

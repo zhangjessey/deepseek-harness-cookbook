@@ -209,12 +209,12 @@ test('ch20 组合包：装上后注册观察与提案工具', async () => {
 
 // ── ch21 组合包 ──
 
-test('ch21 组合包：伪造的 evalResult 骗不过关卡（三关卡由服务端算）', async () => {
-  // 关卡吃的是评测算出的误伤率。若让模型把 evalResult 当参数传进来，它只要传一个
-  // `falsePositiveRate: 0` 就能让 100% 误伤的候选"确定性地"通过风险关卡——关卡成了装饰。
+test('ch21 组合包：伪造的 evalResult 骗不过确认（候选确认由服务端算）', async () => {
+  // 确认吃的是评测算出的误伤率。若让模型把 evalResult 当参数传进来，它只要传一个
+  // `falsePositiveRate: 0` 就能让 100% 误伤的候选"确定性地"通过风险检查——确认成了装饰。
   //
   // 这里用**行为**而不是"入参里有没有这个字段"来验证：直接把伪造值塞进去，
-  // 看关卡是否仍按真实回放判定。（查字段名只能证明当前没这个参数，
+  // 看确认是否仍按真实回放判定。（查字段名只能证明当前没这个参数，
   // 证明不了"就算传了也不会被采信"。）
   const dir = tmpDir('bundle-loop-')
   const ctx = new Context()
@@ -242,7 +242,7 @@ test('ch21 组合包：伪造的 evalResult 骗不过关卡（三关卡由服务
       {} as never,
     )) as { report: { pass: boolean; risk: { pass: boolean; reason: string } } }
 
-    assert.equal(out.report.risk.pass, false, '伪造的 evalResult 不得让风险关卡放行')
+    assert.equal(out.report.risk.pass, false, '伪造的 evalResult 不得让风险检查放行')
     assert.match(
       out.report.risk.reason,
       /误伤率|命中 0 次|样本不足/,

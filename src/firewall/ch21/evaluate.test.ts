@@ -1,6 +1,6 @@
-// src/firewall/ch21/evaluate.test.ts —— 评测（覆盖/精确/误伤、逆推证据、事实校验）的单元测试
+// src/firewall/ch21/evaluate.test.ts —— 评测（覆盖率/精确率/误伤率、逆推证据、事实校验）的单元测试
 //
-// 覆盖"候选真能拦吗"的确定性部分：历史流量回放、覆盖/精确/误伤三指标、
+// 覆盖"候选真能拦吗"的确定性部分：历史流量回放、覆盖率/精确率/误伤率三指标、
 // 从候选逆推证据类别、事实校验、历史流量加载与 Oracle 标注。
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -22,7 +22,7 @@ const cand = (when: unknown): Candidate => ({
 const req = (path: string): TrafficItem['req'] => ({ method: 'GET', path, headers: {}, ip: '1.2.3.4', ua: 'u' })
 
 /**
- * 造一条流量样本。`line`（原始日志行）只有回接（`feedback.ts`）会用到，评测本身不看它，
+ * 造一条流量样本。`line`（原始日志行）只有喂回（`feedback.ts`）会用到，评测本身不看它，
  * 所以这里取最小可编译值；真实流量由 `loadHistoricalTraffic` 从日志解析，自带完整 line。
  */
 const item = (path: string, isBad: boolean): TrafficItem => ({
@@ -37,7 +37,7 @@ test('reverseEvidenceKinds：ua → bad-ua，path 含引号 → sqli，path 其�
   assert.deepEqual(reverseEvidenceKinds(cand({ field: 'path', op: 'starts_with', value: '/admin' })), ['path-probe'])
 })
 
-test('evaluate：覆盖 / 精确 / 误伤全命中', () => {
+test('evaluate：覆盖率 / 精确率 / 误伤率全命中', () => {
   const traffic: TrafficItem[] = [item('/admin', true), item('/admin', true), item('/ok', false)]
   const r = evaluate(cand({ field: 'path', op: 'starts_with', value: '/admin' }), traffic)
   assert.equal(r.totalBad, 2)
@@ -96,7 +96,7 @@ test('loadHistoricalTraffic：文件不存在返回空', () => {
 
 test('回放请求不再被压成空壳：query 从 URI 拆出，query.<name> 类候选能命中', () => {
   // 原实现把 URI 整段（含 ?role=admin）当作 path、query 恒为空，于是 query.role 类候选
-  // 永远匹配不上 → 覆盖恒为 0 → 会被误判成"拦不住任何东西的规则"。
+  // 永远匹配不上 → 覆盖率恒为 0 → 会被误判成"拦不住任何东西的规则"。
   const dir = mkdtempSync(join(tmpdir(), 'eval-q-'))
   try {
     const file = join(dir, 'access.log')

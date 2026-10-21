@@ -1,13 +1,13 @@
 // src/firewall/ch21/loop.test.ts —— 闭环生命周期的单元测试（node:test）
 //
-// 覆盖第 21 讲"上线后持续平衡"的四个转移：初始阶段、灰度转 active、误伤自动回退、老化移出。
+// 覆盖第 21 讲"转正后持续平衡"的四个转移：初始阶段、灰度转 active、误伤自动回退、老化移出。
 // 其中最后一条是回归测试：老化曾按"累计命中数是否为 0"判断，
 // 导致命中过一次的规则永远不会老化，与"避免规则库膨胀"的意图相反。
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { RuleLifecycle } from './loop'
 
-const cfg = { fpThreshold: 0.02, staleHits: 3 }
+const cfg = { fpThreshold: 0.02, staleHits: 3, promoteHits: 3 }
 
 test('自主级别 off / 0 / manual 不自动转正', () => {
   for (const level of ['off', '0', 'manual'] as const) {

@@ -1,7 +1,7 @@
 {
   "name": "dsh-firewall-eval-loop",
   "version": "0.1.0",
-  "description": "dsh 组合包：第21讲评测与闭环（覆盖/精确/误伤评测、确认三关卡、shadow/灰度/老化/自动回退）。",
+  "description": "dsh 组合包：第21讲评测与闭环（覆盖/精确/误伤评测、候选确认、shadow/灰度/老化/自动回退）。",
   "type": "module",
   "main": "lib/index.js",
   "files": [

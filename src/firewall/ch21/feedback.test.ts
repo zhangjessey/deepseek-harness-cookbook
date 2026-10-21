@@ -1,4 +1,4 @@
-// src/firewall/ch21/feedback.test.ts —— 回接（跨轮进化闭环最后一环）的测试
+// src/firewall/ch21/feedback.test.ts —— 喂回（跨轮进化闭环最后一环）的测试
 //
 // 要钉住四件事：
 //  1. 漏拦的坏请求确实被喂回证据库，且每条都带正确的异常类别；
@@ -20,7 +20,7 @@ const trafficFile = fileURLToPath(new URL('traffic.sample.log', import.meta.url)
  * 测试专用配置：`staleHits` 故意调得很大，是为了不让"连续无命中 → 老化"把回放中途截断。
  *
  * 样本前 10 条全是正常请求，按默认的 3 回放不到第 4 条规则就已经 aged_out（终态），
- * 后面漏掉的坏请求一条也记不进信号。本文件验的是**回接**，不是老化
+ * 后面漏掉的坏请求一条也记不进信号。本文件验的是**喂回**，不是老化
  * （老化在 loop.test.ts 里有专项测试），所以这里把老化这个变量隔离掉。
  */
 const cfg = { autonomyLevel: '2' as const, fpThreshold: 0.02, staleHits: 999 }
@@ -33,7 +33,7 @@ const narrow = cand('narrow-1', 'block admin only', { field: 'path', op: 'eq', v
 /** 只拦正常请求 /api/health 的"反向"候选——制造误伤，且不拦任何坏请求。 */
 const wrongTarget = cand('wrong-1', 'block health', { field: 'path', op: 'eq', value: '/api/health' })
 
-test('回接：漏拦的坏请求被喂回证据库，每条都带异常类别', () => {
+test('喂回：漏拦的坏请求被喂回证据库，每条都带异常类别', () => {
   const traffic = loadHistoricalTraffic(trafficFile)
   const lc = new RuleLifecycle(cfg)
   assert.equal(lc.init(true), 'canary', '级别 2 且关卡已过 → 直接灰度')
@@ -46,7 +46,7 @@ test('回接：漏拦的坏请求被喂回证据库，每条都带异常类别',
 
   const session = new ObserveSession()
   const injected = feedMissedToEvidence(session, lc)
-  assert.equal(injected, missed.length, '每条漏拦都应注入一条证据')
+  assert.equal(injected.length, missed.length, '每条漏拦都应注入一条证据')
   assert.equal(session.messages().length, missed.length)
 
   // 每条证据都得带 kind——没有类别的证据对提案毫无用处
@@ -55,7 +55,7 @@ test('回接：漏拦的坏请求被喂回证据库，每条都带异常类别',
   }
 })
 
-test('回接：drain 语义——喂过一次就不再重复喂', () => {
+test('喂回：drain 语义——喂过一次就不再重复喂', () => {
   const traffic = loadHistoricalTraffic(trafficFile)
   const lc = new RuleLifecycle(cfg)
   lc.init(true)
@@ -63,16 +63,16 @@ test('回接：drain 语义——喂过一次就不再重复喂', () => {
 
   const session = new ObserveSession()
   const first = feedMissedToEvidence(session, lc)
-  assert.ok(first > 0, '第一次确实喂回了')
+  assert.ok(first.length > 0, '第一次确实喂回了')
 
   // 再喂两次：同一批漏拦不能被重复喂回，否则证据库里这一条越积越多、
   // 把别的信号全挤掉（第 20 讲抗挤占采样要防的正是这个）
-  assert.equal(feedMissedToEvidence(session, lc), 0, 'drain 之后不应再喂出东西')
-  assert.equal(feedMissedToEvidence(session, lc), 0)
-  assert.equal(session.messages().length, first, '证据数不应因重复调用而增长')
+  assert.equal(feedMissedToEvidence(session, lc).length, 0, 'drain 之后不应再喂出东西')
+  assert.equal(feedMissedToEvidence(session, lc).length, 0)
+  assert.equal(session.messages().length, first.length, '证据数不应因重复调用而增长')
 })
 
-test('回接：喂回的是脱敏证据，原始 ip 与原始 UA 都不进证据', () => {
+test('喂回：脱敏证据，原始 ip 与原始 UA 都不进证据', () => {
   const traffic = loadHistoricalTraffic(trafficFile)
   const lc = new RuleLifecycle(cfg)
   lc.init(true)
@@ -94,7 +94,7 @@ test('回接：喂回的是脱敏证据，原始 ip 与原始 UA 都不进证据
   }
 })
 
-test('回接：只喂漏拦，误伤不混入（误伤由自动回退当场止损）', () => {
+test('喂回：只喂漏拦，误伤不混入（误伤由自动回退当场止损）', () => {
   const traffic = loadHistoricalTraffic(trafficFile)
   const lc = new RuleLifecycle(cfg)
   lc.init(true)
@@ -107,7 +107,7 @@ test('回接：只喂漏拦，误伤不混入（误伤由自动回退当场止�
 
   const session = new ObserveSession()
   const injected = feedMissedToEvidence(session, lc)
-  assert.equal(injected, missedCount, '注入条数应等于漏拦条数')
+  assert.equal(injected.length, missedCount, '注入条数应等于漏拦条数')
 
   // 关键：被误伤的那条正常请求不能作为"异常证据"被喂回去
   const all = session

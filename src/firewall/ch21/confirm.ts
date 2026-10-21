@@ -1,6 +1,6 @@
-// src/firewall/ch21/confirm.ts —— 确认：三种关卡（命名 / 意图 / 风险），关卡在工具代码里、受约束生成
+// src/firewall/ch21/confirm.ts —— 候选确认：三种关卡（命名 / 意图 / 风险），关卡在工具代码里、受约束生成
 //
-// 对应第21讲"确认三种关卡"：候选"转正"前过三关——关卡是写进工具代码的函数（不是靠提示词），
+// 对应第21讲"候选确认"：候选"转正"前过三关——关卡是写进工具代码的函数（不是靠提示词），
 // 并且与 ch20 的"约束在工具代码里"一脉相承：提案受约束生成，确认再校验。
 import { leavesOf } from '../ch18/condition.ts'
 import type { Candidate } from '../ch20/propose'
@@ -94,7 +94,7 @@ export function checkRisk(c: Candidate, evalResult: EvalResult): GateResult {
   if (evalResult.caughtBad + evalResult.caughtGood === 0) {
     return {
       pass: false,
-      reason: `回放样本里命中 0 次（覆盖 0.0%）：该候选拦不住任何东西，无法据此评估风险，需人确认`,
+      reason: `回放样本里命中 0 次（覆盖率 0.0%）：该候选拦不住任何东西，无法据此评估风险，需人确认`,
     }
   }
   if (evalResult.falsePositiveRate > 0.02) {
